@@ -12,6 +12,7 @@
     "build:renderer": "tsc -p tsconfig.renderer.json && node scripts/copy-assets.mjs",
     "build": "npm run clean && npm run build:renderer && npm run build:main",
     "icon": "node scripts/make-icon.mjs",
+    "art": "node scripts/make-installer-art.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --enable-logging",

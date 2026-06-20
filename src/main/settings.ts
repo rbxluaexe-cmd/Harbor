@@ -18,7 +18,8 @@ export class SettingsStore {
 
   constructor() {
     this.store = new JsonStore<StoredSettings>('settings.json', settingsSchema, () => ({
-      homepage: 'https://duckduckgo.com',
+      // Empty homepage means new tabs open Harbor's local start page.
+      homepage: '',
       showLedgerPanel: true,
     }));
   }

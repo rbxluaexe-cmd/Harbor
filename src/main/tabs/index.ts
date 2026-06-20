@@ -21,7 +21,6 @@ import type { PresetConfig } from '../../ipc';
 
 const TOPBAR_HEIGHT = 76;
 const LEDGER_PANEL_WIDTH = 360;
-const HOMEPAGE_FALLBACK = 'https://duckduckgo.com';
 
 interface TabEntry {
   readonly view: WebContentsView;
@@ -38,7 +37,10 @@ export interface TabManagerDeps {
   readonly fingerprint: FingerprintShield;
   readonly ledger: Ledger;
   readonly config: () => PresetConfig;
+  /** User homepage; empty means "use Harbor's local start page". */
   readonly homepage: () => string;
+  /** file:// URL of the bundled start page shown for new/blank tabs. */
+  readonly startPageUrl: string;
   readonly showLedgerPanel: () => boolean;
 }
 
@@ -77,6 +79,8 @@ export class TabManager {
       },
     });
     this.window = win;
+    win.setMenu(null);
+    this.wireShortcuts(win.webContents);
 
     void win.loadFile(chromeHtmlPath);
 
@@ -102,6 +106,12 @@ export class TabManager {
 
   private defaultCompartment(): string {
     return this.deps.config().defaultCompartment === 'persistent' ? 'personal' : EPHEMERAL_COMPARTMENT_ID;
+  }
+
+  /** Where a fresh tab points: the user's homepage, or the local start page. */
+  private newTabTarget(): string {
+    const home = this.deps.homepage().trim();
+    return home.length > 0 ? home : this.deps.startPageUrl;
   }
 
   create(compartmentId?: string, url?: string): TabInfo {
@@ -134,15 +144,42 @@ export class TabManager {
     void this.deps.fingerprint.attach(wc, targetCompartment);
 
     this.wireTabEvents(entry);
+    this.wireShortcuts(wc);
 
     this.window.contentView.addChildView(view);
-    const startUrl = url ?? this.deps.homepage() ?? HOMEPAGE_FALLBACK;
+    const startUrl = url ?? this.newTabTarget();
     entry.url = startUrl;
     void wc.loadURL(startUrl);
 
     this.activate(wc.id);
     this.emitListChanged();
     return this.buildInfo(entry);
+  }
+
+  /**
+   * Browser keyboard shortcuts, handled per-webContents so they work whether
+   * the chrome or a web page has focus — without a native menu bar.
+   */
+  private wireShortcuts(wc: WebContents): void {
+    wc.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') {
+        return;
+      }
+      const mod = input.control || input.meta;
+      const key = input.key.toLowerCase();
+      let handled = true;
+      if (mod && key === 't') this.create();
+      else if (mod && key === 'w') this.closeActive();
+      else if ((mod && key === 'r') || key === 'f5') this.reloadActive();
+      else if (mod && key === 'l') this.focusAddress();
+      else if (input.alt && key === 'arrowleft') this.backActive();
+      else if (input.alt && key === 'arrowright') this.forwardActive();
+      else if ((mod && input.shift && key === 'i') || key === 'f12') this.toggleDevToolsActive();
+      else handled = false;
+      if (handled) {
+        event.preventDefault();
+      }
+    });
   }
 
   private wireTabEvents(entry: TabEntry): void {
@@ -341,11 +378,13 @@ export class TabManager {
 
   private buildInfo(entry: TabEntry): TabInfo {
     const wc = entry.view.webContents;
+    // The local start page shows as a clean, empty address bar.
+    const isStart = entry.url === this.deps.startPageUrl;
     return {
       id: wc.id,
       compartmentId: entry.compartmentId,
-      title: entry.title || wc.getTitle() || 'New Tab',
-      url: entry.url,
+      title: isStart ? 'New Tab' : entry.title || wc.getTitle() || 'New Tab',
+      url: isStart ? '' : entry.url,
       loadState: entry.loadState,
       canGoBack: wc.canGoBack(),
       canGoForward: wc.canGoForward(),

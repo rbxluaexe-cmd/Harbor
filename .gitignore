@@ -6,3 +6,4 @@ release/
 *.tsbuildinfo
 checksums.txt
 checksums.txt.minisig
+build/*.preview.png

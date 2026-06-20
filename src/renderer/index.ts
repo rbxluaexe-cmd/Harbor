@@ -295,7 +295,11 @@ function renderSettings(body: HTMLElement): void {
   }
 
   // Homepage
-  const homeInput = el('input', { type: 'text', value: state.settings.homepage }) as HTMLInputElement;
+  const homeInput = el('input', {
+    type: 'text',
+    value: state.settings.homepage,
+    placeholder: 'Empty = Harbor start page',
+  }) as HTMLInputElement;
   const homeSection = el('div', { class: 'section' }, [
     el('h3', { text: 'General' }),
     el('div', { class: 'field' }, [

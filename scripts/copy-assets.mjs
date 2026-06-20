@@ -9,7 +9,7 @@ const src = join(root, 'src', 'renderer');
 const dest = join(root, 'dist', 'renderer');
 
 mkdirSync(dest, { recursive: true });
-for (const file of ['index.html', 'styles.css']) {
+for (const file of ['index.html', 'styles.css', 'newtab.html']) {
   cpSync(join(src, file), join(dest, file));
 }
 // Runtime window/taskbar icon, loaded by the main process at window creation.

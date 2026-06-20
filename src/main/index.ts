@@ -13,8 +13,9 @@
 import { appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import { app, dialog, globalShortcut } from 'electron';
+import { app, dialog, globalShortcut, Menu } from 'electron';
 
 import { Bus } from './bus';
 import { CompartmentManager } from './identity';
@@ -25,7 +26,6 @@ import { NetworkGuard } from './network';
 import { configureSecureDns } from './network/secure-dns';
 import { PresetManager } from './presets';
 import { registerIpcRouter } from './ipc-router';
-import { installAppMenu } from './menu';
 import { SettingsStore } from './settings';
 import { SyncClient, type SyncDataProvider } from './sync';
 import { TabManager } from './tabs';
@@ -102,6 +102,9 @@ if (!app.requestSingleInstanceLock()) {
 
 function start(): void {
   logLine('starting up');
+  // No native application menu — Harbor's chrome is the only UI. Keyboard
+  // shortcuts are handled per-webContents in the tab manager instead.
+  Menu.setApplicationMenu(null);
   const bus = new Bus();
   const presets = new PresetManager(bus);
   const settings = new SettingsStore();
@@ -147,6 +150,8 @@ function start(): void {
   };
   const sync = new SyncClient(bus, syncProvider);
 
+  const startPageUrl = pathToFileURL(join(__dirname, '..', 'renderer', 'newtab.html')).href;
+
   tabs = new TabManager({
     bus,
     compartments,
@@ -155,6 +160,7 @@ function start(): void {
     ledger,
     config: () => presets.current(),
     homepage: () => settings.get().homepage,
+    startPageUrl,
     showLedgerPanel: () => settings.get().showLedgerPanel,
   });
 
@@ -172,16 +178,6 @@ function start(): void {
     // A bad global-shortcut binding must never prevent the app from opening.
     logLine(`duress.init failed: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  installAppMenu({
-    newTab: () => tabs.create(),
-    closeTab: () => tabs.closeActive(),
-    reload: () => tabs.reloadActive(),
-    back: () => tabs.backActive(),
-    forward: () => tabs.forwardActive(),
-    focusAddress: () => tabs.focusAddress(),
-    toggleDevTools: () => tabs.toggleDevToolsActive(),
-  });
 
   // Open the initial tab immediately; the chrome UI picks it up via bootstrap
   // when it finishes loading, so we don't depend on event timing.
