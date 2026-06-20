@@ -5,10 +5,16 @@
  * router, and brings up the main window. Modules receive only the narrow
  * callbacks they need (e.g. a config getter, a wipe function) rather than
  * references to each other's internals.
+ *
+ * Startup is wrapped so any failure is *visible*: it is written to a log file
+ * and shown in an error dialog instead of the process dying silently with no
+ * window. All filesystem/app-path access happens after `whenReady`.
  */
+import { appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { app, globalShortcut } from 'electron';
+import { app, dialog, globalShortcut } from 'electron';
 
 import { Bus } from './bus';
 import { CompartmentManager } from './identity';
@@ -26,23 +32,83 @@ import { TabManager } from './tabs';
 import { UpdateChecker } from './update';
 import type { StoredSettings } from './settings';
 
+/** Append a line to a crash log in userData (falling back to the temp dir). */
+function logLine(message: string): void {
+  const line = `[${new Date().toISOString()}] ${message}\n`;
+  for (const dir of safeDirs()) {
+    try {
+      appendFileSync(join(dir, 'harbor.log'), line);
+      break;
+    } catch {
+      // try the next directory
+    }
+  }
+  try {
+    // eslint-disable-next-line no-console
+    console.error(line.trimEnd());
+  } catch {
+    // ignore
+  }
+}
+
+function safeDirs(): string[] {
+  const dirs: string[] = [];
+  try {
+    dirs.push(app.getPath('userData'));
+  } catch {
+    // app path not available yet
+  }
+  dirs.push(tmpdir());
+  return dirs;
+}
+
+function fatal(label: string, err: unknown): void {
+  const detail = err instanceof Error ? (err.stack ?? err.message) : String(err);
+  logLine(`FATAL ${label}: ${detail}`);
+  try {
+    dialog.showErrorBox('Harbor failed to start', `${label}\n\n${detail}`);
+  } catch {
+    // showErrorBox can fail very early; the log still captured it.
+  }
+}
+
+// Make any otherwise-unhandled failure visible rather than silent.
+process.on('uncaughtException', (err) => {
+  fatal('uncaughtException', err);
+  app.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+  logLine(`unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`);
+});
+
 app.setName('Harbor');
 // Stable identity for Windows taskbar grouping and notifications.
 app.setAppUserModelId('org.harbor.browser');
-
-// Config that must be set before the app is ready (command-line switches).
-const bus = new Bus();
-const presets = new PresetManager(bus);
-const settings = new SettingsStore();
-configureSecureDns(app.commandLine, presets.current().dnsMode);
 
 // Single-instance: a second launch focuses the existing window instead of
 // spawning a parallel session that could fragment compartments.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
+} else {
+  app.on('second-instance', () => {
+    // The single window is managed by TabManager; nothing to focus explicitly.
+  });
+
+  app.whenReady().then(start).catch((err: unknown) => {
+    fatal('startup', err);
+    app.exit(1);
+  });
 }
 
 function start(): void {
+  logLine('starting up');
+  const bus = new Bus();
+  const presets = new PresetManager(bus);
+  const settings = new SettingsStore();
+  // No-op for the default (system) DNS mode; only DoH/ODoH presets add switches,
+  // which take full effect on the next launch.
+  configureSecureDns(app.commandLine, presets.current().dnsMode);
+
   const compartments = new CompartmentManager(bus);
 
   // TabManager is referenced by the network guard's first-party check before it
@@ -98,7 +164,14 @@ function start(): void {
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');
   const iconPath = join(__dirname, '..', 'icon.png');
   const win = tabs.createWindow(preloadPath, chromeHtmlPath, iconPath);
-  duress.init();
+  logLine('window created');
+
+  try {
+    duress.init();
+  } catch (err) {
+    // A bad global-shortcut binding must never prevent the app from opening.
+    logLine(`duress.init failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 
   installAppMenu({
     newTab: () => tabs.create(),
@@ -110,11 +183,10 @@ function start(): void {
     toggleDevTools: () => tabs.toggleDevToolsActive(),
   });
 
-  // Open an initial ephemeral tab once the chrome UI has loaded.
-  const chrome = tabs.chromeWebContents();
-  chrome?.once('did-finish-load', () => {
-    tabs.create();
-  });
+  // Open the initial tab immediately; the chrome UI picks it up via bootstrap
+  // when it finishes loading, so we don't depend on event timing.
+  tabs.create();
+  logLine('initial tab created');
 
   win.on('closed', () => {
     duress.dispose();
@@ -123,12 +195,6 @@ function start(): void {
     }
   });
 }
-
-app.on('second-instance', () => {
-  // Focus handling is best-effort; the single window is managed by TabManager.
-});
-
-void app.whenReady().then(start);
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();

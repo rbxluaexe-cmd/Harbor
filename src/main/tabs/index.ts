@@ -1,14 +1,15 @@
 /**
  * Tab manager — the browser shell.
  *
- * Hosts a BaseWindow with a chrome view (the renderer UI) and one
- * `WebContentsView` per tab. Each tab is bound to a compartment session, so
- * storage isolation is enforced by Chromium. On tab creation the manager asks
- * the network guard to apply the WebRTC policy and the fingerprint shield to
- * inject — it calls their public methods as the orchestrator, without those
- * modules knowing about each other.
+ * Hosts a `BrowserWindow` whose own web contents render the chrome UI, plus one
+ * `WebContentsView` per tab layered on top in the content area. BrowserWindow is
+ * the most broadly-tested window type across platforms. Each tab is bound to a
+ * compartment session, so storage isolation is enforced by Chromium. On tab
+ * creation the manager asks the network guard to apply the WebRTC policy and the
+ * fingerprint shield to inject — calling their public methods as the
+ * orchestrator, without those modules knowing about each other.
  */
-import { BaseWindow, WebContentsView, type WebContents } from 'electron';
+import { BrowserWindow, WebContentsView, type WebContents } from 'electron';
 
 import type { TabInfo, TabLoadState } from '../../ipc';
 import { Bus } from '../bus';
@@ -42,8 +43,7 @@ export interface TabManagerDeps {
 }
 
 export class TabManager {
-  private window: BaseWindow | null = null;
-  private chromeView: WebContentsView | null = null;
+  private window: BrowserWindow | null = null;
   private readonly tabs = new Map<number, TabEntry>();
   private activeTabId: number | null = null;
 
@@ -55,19 +55,16 @@ export class TabManager {
     });
   }
 
-  /** Create the main window and load the chrome UI. */
-  createWindow(preloadPath: string, chromeHtmlPath: string, iconPath: string): BaseWindow {
-    const win = new BaseWindow({
+  /** Create the main window and load the chrome UI into its web contents. */
+  createWindow(preloadPath: string, chromeHtmlPath: string, iconPath: string): BrowserWindow {
+    const win = new BrowserWindow({
       width: 1280,
       height: 840,
       minWidth: 800,
       minHeight: 600,
       title: 'Harbor',
       icon: iconPath,
-    });
-    this.window = win;
-
-    const chrome = new WebContentsView({
+      backgroundColor: '#0f172a',
       webPreferences: {
         preload: preloadPath,
         contextIsolation: true,
@@ -79,21 +76,19 @@ export class TabManager {
         nodeIntegration: false,
       },
     });
-    this.chromeView = chrome;
-    win.contentView.addChildView(chrome);
-    void chrome.webContents.loadFile(chromeHtmlPath);
+    this.window = win;
+
+    void win.loadFile(chromeHtmlPath);
 
     win.on('resize', () => this.layout());
     win.on('closed', () => {
       this.window = null;
-      this.chromeView = null;
     });
-    this.layout();
     return win;
   }
 
   chromeWebContents(): WebContents | null {
-    return this.chromeView?.webContents ?? null;
+    return this.window?.webContents ?? null;
   }
 
   /** Top-level URL of a tab — used by the network guard for first-party checks. */
@@ -253,7 +248,7 @@ export class TabManager {
     else wc.openDevTools({ mode: 'detach' });
   }
   focusAddress(): void {
-    this.chromeView?.webContents.send('ui:focus-address', null);
+    this.window?.webContents.send('ui:focus-address', null);
   }
 
   close(tabId: number): readonly TabInfo[] {
@@ -317,13 +312,12 @@ export class TabManager {
   }
 
   private layout(): void {
-    if (!this.window || !this.chromeView) {
+    if (!this.window) {
       return;
     }
     const [width, height] = this.window.getContentSize();
     const w = width ?? 0;
     const h = height ?? 0;
-    this.chromeView.setBounds({ x: 0, y: 0, width: w, height: h });
     const panelWidth = this.deps.showLedgerPanel() ? LEDGER_PANEL_WIDTH : 0;
     const contentBounds = {
       x: 0,

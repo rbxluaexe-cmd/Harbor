@@ -45,7 +45,8 @@ export function configureSecureDns(commandLine: CommandLine, mode: DnsMode): voi
  */
 export async function applyOdohProxy(session: Session, mode: DnsMode): Promise<void> {
   if (mode !== 'odoh-relay') {
-    await session.setProxy({ mode: 'direct' });
+    // Leave the session on its default (system) proxy resolution; don't force
+    // 'direct', which would bypass a user's configured proxy.
     return;
   }
   // TODO(odoh): point this at the local ODoH relay client's listening proxy
