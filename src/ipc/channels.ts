@@ -1,0 +1,206 @@
+/**
+ * The complete, typed channel catalogue for Harbor's IPC.
+ *
+ * `InvokeMap` describes request/response (renderer -> main -> renderer) calls.
+ * `EventMap` describes pushes (main -> renderer). The preload bridge and the
+ * main-process router are both generated from these maps, so adding a channel
+ * in one place makes it type-checked everywhere.
+ */
+import type {
+  BootstrapState,
+  Compartment,
+  DuressConfig,
+  DuressStatus,
+  LedgerSnapshot,
+  Preset,
+  PresetSummary,
+  Settings,
+  SyncResult,
+  SyncStatus,
+  TabInfo,
+  UpdateStatus,
+} from './types';
+
+/** Request/response channels invoked from the renderer. */
+export interface InvokeMap {
+  'app:bootstrap': {
+    request: void;
+    response: BootstrapState;
+  };
+
+  'compartments:list': {
+    request: void;
+    response: readonly Compartment[];
+  };
+  'compartments:create': {
+    request: { name: string; color: string; persistent: boolean };
+    response: Compartment;
+  };
+  'compartments:remove': {
+    request: { id: string };
+    response: readonly Compartment[];
+  };
+
+  'tabs:list': {
+    request: void;
+    response: readonly TabInfo[];
+  };
+  'tabs:create': {
+    request: { compartmentId?: string; url?: string };
+    response: TabInfo;
+  };
+  'tabs:close': {
+    request: { tabId: number };
+    response: readonly TabInfo[];
+  };
+  'tabs:activate': {
+    request: { tabId: number };
+    response: void;
+  };
+  'tabs:navigate': {
+    request: { tabId: number; url: string };
+    response: TabInfo;
+  };
+  'tabs:goBack': {
+    request: { tabId: number };
+    response: void;
+  };
+  'tabs:goForward': {
+    request: { tabId: number };
+    response: void;
+  };
+  'tabs:reload': {
+    request: { tabId: number };
+    response: void;
+  };
+  'tabs:reassign': {
+    request: { tabId: number; compartmentId: string };
+    response: TabInfo;
+  };
+
+  'ledger:get': {
+    request: { tabId: number };
+    response: LedgerSnapshot;
+  };
+
+  'presets:list': {
+    request: void;
+    response: readonly PresetSummary[];
+  };
+  'presets:get': {
+    request: { name: string };
+    response: Preset;
+  };
+  'presets:apply': {
+    request: { name: string };
+    response: readonly PresetSummary[];
+  };
+
+  'sync:status': {
+    request: void;
+    response: SyncStatus;
+  };
+  'sync:enable': {
+    request: { password: string; serverUrl: string };
+    response: SyncStatus;
+  };
+  'sync:disable': {
+    request: void;
+    response: SyncStatus;
+  };
+  'sync:push': {
+    request: void;
+    response: SyncResult;
+  };
+  'sync:pull': {
+    request: void;
+    response: SyncResult;
+  };
+
+  'duress:status': {
+    request: void;
+    response: DuressStatus;
+  };
+  'duress:configure': {
+    request: { config: DuressConfig };
+    response: DuressStatus;
+  };
+  'duress:trigger': {
+    request: void;
+    response: void;
+  };
+
+  'update:check': {
+    request: void;
+    response: UpdateStatus;
+  };
+
+  'settings:get': {
+    request: void;
+    response: Settings;
+  };
+  'settings:set': {
+    request: { patch: Partial<Settings> };
+    response: Settings;
+  };
+}
+
+/** One-way pushes from main to the renderer chrome. */
+export interface EventMap {
+  'tabs:updated': TabInfo;
+  'tabs:list-changed': readonly TabInfo[];
+  'ledger:updated': LedgerSnapshot;
+  'compartments:changed': readonly Compartment[];
+  'duress:activated': { wipedCompartments: readonly string[]; decoyActivated: boolean };
+  'preset:changed': readonly PresetSummary[];
+  'sync:changed': SyncStatus;
+}
+
+export type InvokeChannel = keyof InvokeMap;
+export type EventChannel = keyof EventMap;
+
+/**
+ * The list of every invoke channel, used by the main router to register
+ * handlers and by the preload bridge to expose typed callers. Keep in sync
+ * with `InvokeMap` — the satisfies clause makes a mismatch a compile error.
+ */
+export const INVOKE_CHANNELS = [
+  'app:bootstrap',
+  'compartments:list',
+  'compartments:create',
+  'compartments:remove',
+  'tabs:list',
+  'tabs:create',
+  'tabs:close',
+  'tabs:activate',
+  'tabs:navigate',
+  'tabs:goBack',
+  'tabs:goForward',
+  'tabs:reload',
+  'tabs:reassign',
+  'ledger:get',
+  'presets:list',
+  'presets:get',
+  'presets:apply',
+  'sync:status',
+  'sync:enable',
+  'sync:disable',
+  'sync:push',
+  'sync:pull',
+  'duress:status',
+  'duress:configure',
+  'duress:trigger',
+  'update:check',
+  'settings:get',
+  'settings:set',
+] as const satisfies readonly InvokeChannel[];
+
+export const EVENT_CHANNELS = [
+  'tabs:updated',
+  'tabs:list-changed',
+  'ledger:updated',
+  'compartments:changed',
+  'duress:activated',
+  'preset:changed',
+  'sync:changed',
+] as const satisfies readonly EventChannel[];

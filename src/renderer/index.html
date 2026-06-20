@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Strict CSP for the chrome UI: no remote code, no inline script. The UI
+      script is a single local module. The chrome never loads remote content;
+      web pages live in separate, isolated WebContentsViews.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self';"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Harbor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header id="topbar">
+      <div id="tabstrip"></div>
+      <div id="toolbar"></div>
+    </header>
+    <aside id="panel" hidden></aside>
+    <script type="module" src="./index.js"></script>
+  </body>
+</html>

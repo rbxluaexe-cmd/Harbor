@@ -1,0 +1,41 @@
+# electron-builder configuration.
+#
+# Binary transparency goals: dependency versions are pinned in package.json
+# (no ^/~ ranges), and the artifact name is timestamp-free so two builds of the
+# same source produce identically-named outputs. After building, run
+# `npm run checksums` to emit a signable checksums.txt manifest.
+appId: org.harbor.browser
+productName: Harbor
+copyright: Harbor contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# Ship only the compiled output and production deps — never source or dev tooling.
+files:
+  - dist/**/*
+  - package.json
+  - '!**/*.map'
+
+# Deterministic, timestamp-free artifact names aid reproducibility checks.
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+
+# Pin to the source-of-truth Electron from devDependencies rather than
+# downloading an unpinned build at package time.
+electronVersion: 31.2.1
+
+linux:
+  target:
+    - AppImage
+    - tar.gz
+  category: Network
+
+win:
+  target:
+    - dir
+
+mac:
+  target:
+    - dir
+  category: public.app-category.productivity

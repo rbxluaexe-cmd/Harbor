@@ -1,0 +1,36 @@
+{
+  "name": "harbor",
+  "version": "0.1.0",
+  "description": "Harbor — a privacy-first desktop browser built on Electron",
+  "private": true,
+  "license": "MIT",
+  "author": "Harbor contributors",
+  "main": "dist/main/index.js",
+  "scripts": {
+    "clean": "rimraf dist",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json && node scripts/copy-assets.mjs",
+    "build": "npm run clean && npm run build:renderer && npm run build:main",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --enable-logging",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "dist": "npm run build && electron-builder",
+    "checksums": "node scripts/checksums.mjs"
+  },
+  "dependencies": {
+    "libsodium-wrappers": "0.7.15",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/libsodium-wrappers": "0.7.14",
+    "@types/node": "20.14.10",
+    "electron": "31.2.1",
+    "electron-builder": "24.13.3",
+    "rimraf": "5.0.7",
+    "typescript": "5.5.3"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
