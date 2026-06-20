@@ -96,7 +96,8 @@ function start(): void {
 
   const preloadPath = join(__dirname, '..', 'preload', 'index.js');
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');
-  const win = tabs.createWindow(preloadPath, chromeHtmlPath);
+  const iconPath = join(__dirname, '..', 'icon.png');
+  const win = tabs.createWindow(preloadPath, chromeHtmlPath, iconPath);
   duress.init();
 
   installAppMenu({

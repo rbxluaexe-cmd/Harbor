@@ -56,8 +56,15 @@ export class TabManager {
   }
 
   /** Create the main window and load the chrome UI. */
-  createWindow(preloadPath: string, chromeHtmlPath: string): BaseWindow {
-    const win = new BaseWindow({ width: 1280, height: 840, minWidth: 800, minHeight: 600, title: 'Harbor' });
+  createWindow(preloadPath: string, chromeHtmlPath: string, iconPath: string): BaseWindow {
+    const win = new BaseWindow({
+      width: 1280,
+      height: 840,
+      minWidth: 800,
+      minHeight: 600,
+      title: 'Harbor',
+      icon: iconPath,
+    });
     this.window = win;
 
     const chrome = new WebContentsView({

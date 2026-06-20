@@ -12,4 +12,6 @@ mkdirSync(dest, { recursive: true });
 for (const file of ['index.html', 'styles.css']) {
   cpSync(join(src, file), join(dest, file));
 }
+// Runtime window/taskbar icon, loaded by the main process at window creation.
+cpSync(join(root, 'build', 'icon.png'), join(root, 'dist', 'icon.png'));
 console.log('Copied renderer assets to dist/renderer');

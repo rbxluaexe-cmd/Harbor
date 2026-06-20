@@ -34,10 +34,12 @@ linux:
 win:
   target:
     - nsis
+  icon: build/icon.ico
   # Skip the rcedit/sign pass (which needs wine when building from Linux). The
-  # produced exe carries default version metadata and the default Electron icon;
-  # functionality is unaffected. For a signed, branded release build on Windows
-  # (or with wine available), remove this line.
+  # produced exe keeps the default version metadata and Electron icon (embedding
+  # a custom exe icon needs rcedit/wine); the installer, shortcuts, and the
+  # running window all use build/icon.ico/png regardless. For a fully branded,
+  # signed exe, build on Windows (or with wine) and remove this line.
   signAndEditExecutable: false
 
 # A friendly installer the recipient can double-click. Not one-click, so they

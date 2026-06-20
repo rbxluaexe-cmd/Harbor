@@ -19,6 +19,7 @@ const version = pkg.version;
 const srcDir = join(root, 'release', 'win-unpacked');
 const outFile = join(root, 'release', `Harbor-Setup-${version}.exe`);
 const nsi = join(root, 'build', 'installer.nsi');
+const iconFile = join(root, 'build', 'icon.ico');
 
 if (!existsSync(srcDir)) {
   console.log('release/win-unpacked not found — packaging the app first…');
@@ -32,7 +33,7 @@ if (!existsSync(srcDir)) {
 console.log('Compiling installer with makensis…');
 execFileSync(
   'makensis',
-  [`-DSRCDIR=${srcDir}`, `-DOUTFILE=${outFile}`, `-DVERSION=${version}`, nsi],
+  [`-DSRCDIR=${srcDir}`, `-DOUTFILE=${outFile}`, `-DVERSION=${version}`, `-DICONFILE=${iconFile}`, nsi],
   { cwd: root, stdio: 'inherit' },
 );
 console.log(`\nInstaller written to ${outFile}`);
