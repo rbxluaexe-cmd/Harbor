@@ -25,12 +25,8 @@ artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 # downloading an unpinned build at package time.
 electronVersion: 31.2.1
 
-linux:
-  target:
-    - AppImage
-    - tar.gz
-  category: Network
-
+# Windows-only for now (per project scope). macOS/Linux targets can be added
+# back here when those clients are in scope.
 win:
   target:
     - nsis
@@ -52,8 +48,3 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: Harbor
   artifactName: ${productName}-Setup-${version}.${ext}
-
-mac:
-  target:
-    - dmg
-  category: public.app-category.productivity
