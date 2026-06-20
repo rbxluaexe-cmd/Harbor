@@ -16,7 +16,10 @@ export const DEFAULT_PRESETS: readonly Preset[] = [
     description: 'Balanced defaults: blocks trackers and uncloaks CNAMEs without breaking sites.',
     config: {
       fingerprintMode: 'standard',
-      dnsMode: 'doh',
+      // System DNS by default so the browser always resolves out of the box;
+      // DoH (which hard-fails on networks that block it) is opt-in via the
+      // stricter presets below.
+      dnsMode: 'system',
       defaultCompartment: 'ephemeral',
       webRtcPolicy: 'proxy-only',
       cnameUncloaking: true,

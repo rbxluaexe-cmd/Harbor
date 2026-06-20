@@ -628,6 +628,10 @@ function subscribe(): void {
     state.sync = status;
     if (state.panelMode === 'settings') renderPanel();
   });
+  harbor.on('ui:focus-address', () => {
+    urlInput.focus();
+    urlInput.select();
+  });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();

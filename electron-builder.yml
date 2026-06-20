@@ -33,9 +33,25 @@ linux:
 
 win:
   target:
-    - dir
+    - nsis
+  # Skip the rcedit/sign pass (which needs wine when building from Linux). The
+  # produced exe carries default version metadata and the default Electron icon;
+  # functionality is unaffected. For a signed, branded release build on Windows
+  # (or with wine available), remove this line.
+  signAndEditExecutable: false
+
+# A friendly installer the recipient can double-click. Not one-click, so they
+# can pick the install location; per-user so it needs no admin rights.
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Harbor
+  artifactName: ${productName}-Setup-${version}.${ext}
 
 mac:
   target:
-    - dir
+    - dmg
   category: public.app-category.productivity

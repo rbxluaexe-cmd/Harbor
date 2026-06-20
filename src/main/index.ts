@@ -19,6 +19,7 @@ import { NetworkGuard } from './network';
 import { configureSecureDns } from './network/secure-dns';
 import { PresetManager } from './presets';
 import { registerIpcRouter } from './ipc-router';
+import { installAppMenu } from './menu';
 import { SettingsStore } from './settings';
 import { SyncClient, type SyncDataProvider } from './sync';
 import { TabManager } from './tabs';
@@ -26,6 +27,8 @@ import { UpdateChecker } from './update';
 import type { StoredSettings } from './settings';
 
 app.setName('Harbor');
+// Stable identity for Windows taskbar grouping and notifications.
+app.setAppUserModelId('org.harbor.browser');
 
 // Config that must be set before the app is ready (command-line switches).
 const bus = new Bus();
@@ -95,6 +98,16 @@ function start(): void {
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');
   const win = tabs.createWindow(preloadPath, chromeHtmlPath);
   duress.init();
+
+  installAppMenu({
+    newTab: () => tabs.create(),
+    closeTab: () => tabs.closeActive(),
+    reload: () => tabs.reloadActive(),
+    back: () => tabs.backActive(),
+    forward: () => tabs.forwardActive(),
+    focusAddress: () => tabs.focusAddress(),
+    toggleDevTools: () => tabs.toggleDevToolsActive(),
+  });
 
   // Open an initial ephemeral tab once the chrome UI has loaded.
   const chrome = tabs.chromeWebContents();

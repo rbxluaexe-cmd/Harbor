@@ -81,14 +81,34 @@ Running as root (e.g. CI containers) requires `electron . --no-sandbox`.
 
 ## Packaging & transparency
 
+On **Windows** (or any host with wine), the simplest path is electron-builder's
+own NSIS target:
+
 ```bash
-npm run dist        # electron-builder, output in release/
-npm run checksums   # SHA-256 manifest of release/ artifacts
-minisign -Sm checksums.txt   # sign it out-of-band
+npm run dist        # electron-builder → release/Harbor-Setup-<version>.exe
+```
+
+On **Linux without wine**, build the portable app with electron-builder and wrap
+it with native `makensis` (no wine needed):
+
+```bash
+sudo apt-get install -y nsis   # provides makensis
+npm run installer              # release/win-unpacked → Harbor-Setup-<version>.exe
+```
+
+Then publish signed checksums:
+
+```bash
+npm run checksums              # SHA-256 manifest of release/ artifacts
+minisign -Sm checksums.txt     # sign it out-of-band
 ```
 
 Dependency versions are pinned (no `^`/`~`) and artifact names are
 timestamp-free so two builds of the same source are comparable.
+
+> The installer is unsigned, so Windows SmartScreen shows a "Windows protected
+> your PC" prompt on first run — click **More info → Run anyway**. It installs
+> per-user under `%LOCALAPPDATA%\Programs\Harbor` and needs no admin rights.
 
 ## Deliberately deferred
 

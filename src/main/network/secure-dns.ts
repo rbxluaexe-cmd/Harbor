@@ -17,8 +17,10 @@ import type { CommandLine, Session } from 'electron';
 
 import type { DnsMode } from '../../ipc';
 
-// A public DoH resolver template. Verify availability/policy before shipping.
-const DOH_TEMPLATE = 'https://dns.cloudflare.com/dns-query';
+// Cloudflare's canonical DoH endpoint — a provider Chromium recognises, so it
+// can bootstrap without a classic-DNS lookup of the resolver host. Verify
+// availability/policy before shipping.
+const DOH_TEMPLATE = 'https://cloudflare-dns.com/dns-query';
 
 /**
  * Apply secure-DNS command-line switches. Call before the app `ready` event.

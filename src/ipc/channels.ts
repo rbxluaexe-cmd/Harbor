@@ -154,6 +154,8 @@ export interface EventMap {
   'duress:activated': { wipedCompartments: readonly string[]; decoyActivated: boolean };
   'preset:changed': readonly PresetSummary[];
   'sync:changed': SyncStatus;
+  /** Ask the renderer to focus and select the address bar (menu / Ctrl+L). */
+  'ui:focus-address': null;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -203,4 +205,5 @@ export const EVENT_CHANNELS = [
   'duress:activated',
   'preset:changed',
   'sync:changed',
+  'ui:focus-address',
 ] as const satisfies readonly EventChannel[];

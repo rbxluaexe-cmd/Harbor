@@ -222,6 +222,33 @@ export class TabManager {
     this.requireTab(tabId).view.webContents.reload();
   }
 
+  getActiveId(): number | null {
+    return this.activeTabId;
+  }
+
+  /** Operate on the currently active tab — used by the application menu. */
+  reloadActive(): void {
+    if (this.activeTabId !== null) this.reload(this.activeTabId);
+  }
+  backActive(): void {
+    if (this.activeTabId !== null) this.goBack(this.activeTabId);
+  }
+  forwardActive(): void {
+    if (this.activeTabId !== null) this.goForward(this.activeTabId);
+  }
+  closeActive(): void {
+    if (this.activeTabId !== null) this.close(this.activeTabId);
+  }
+  toggleDevToolsActive(): void {
+    if (this.activeTabId === null) return;
+    const wc = this.requireTab(this.activeTabId).view.webContents;
+    if (wc.isDevToolsOpened()) wc.closeDevTools();
+    else wc.openDevTools({ mode: 'detach' });
+  }
+  focusAddress(): void {
+    this.chromeView?.webContents.send('ui:focus-address', null);
+  }
+
   close(tabId: number): readonly TabInfo[] {
     const entry = this.tabs.get(tabId);
     if (!entry) {
