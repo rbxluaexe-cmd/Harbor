@@ -31,6 +31,14 @@ win:
   target:
     - nsis
   icon: build/icon.ico
+  # Skip the rcedit/sign pass. It pulls in winCodeSign, whose archive contains
+  # macOS symlinks that fail to extract on Windows without the "create symbolic
+  # links" privilege (Developer Mode/admin), and it needs wine on Linux. The
+  # installer wizard, shortcuts, Add/Remove entry, and the running app window
+  # all use build/icon.ico/png regardless; only the raw Harbor.exe file
+  # thumbnail keeps the default Electron icon. To fully brand the exe, build with
+  # Windows Developer Mode enabled and remove this line.
+  signAndEditExecutable: false
 
 # A friendly installer the recipient can double-click. Not one-click, so they
 # can pick the install location; per-user so it needs no admin rights.
