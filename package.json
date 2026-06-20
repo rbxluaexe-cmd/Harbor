@@ -17,7 +17,7 @@
     "dev": "npm run build && electron . --enable-logging",
     "lint": "tsc -p tsconfig.json --noEmit",
     "dist": "npm run build && electron-builder",
-    "pack:win": "npm run build && electron-builder --win dir --x64",
+    "pack:win": "npm run build && electron-builder --win dir --x64 -c.win.signAndEditExecutable=false",
     "installer": "npm run pack:win && node scripts/build-installer.mjs",
     "checksums": "node scripts/checksums.mjs"
   },

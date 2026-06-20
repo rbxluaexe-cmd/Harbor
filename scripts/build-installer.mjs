@@ -18,16 +18,16 @@ const version = pkg.version;
 
 const srcDir = join(root, 'release', 'win-unpacked');
 const outFile = join(root, 'release', `Harbor-Setup-${version}.exe`);
-const nsi = join(root, 'build', 'installer.nsi');
+const nsi = join(root, 'installer', 'installer.nsi');
 const iconFile = join(root, 'build', 'icon.ico');
 
 if (!existsSync(srcDir)) {
   console.log('release/win-unpacked not found — packaging the app first…');
-  execFileSync('npx', ['electron-builder', '--win', 'dir', '--x64'], {
-    cwd: root,
-    stdio: 'inherit',
-    env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' },
-  });
+  execFileSync(
+    'npx',
+    ['electron-builder', '--win', 'dir', '--x64', '-c.win.signAndEditExecutable=false'],
+    { cwd: root, stdio: 'inherit', env: { ...process.env, CSC_IDENTITY_AUTO_DISCOVERY: 'false' } },
+  );
 }
 
 console.log('Compiling installer with makensis…');
