@@ -143,6 +143,32 @@ export interface InvokeMap {
     request: { patch: Partial<Settings> };
     response: Settings;
   };
+
+  'window:minimize': {
+    request: void;
+    response: void;
+  };
+  'window:toggleMaximize': {
+    request: void;
+    response: void;
+  };
+  'window:close': {
+    request: void;
+    response: void;
+  };
+  'window:isMaximized': {
+    request: void;
+    response: boolean;
+  };
+
+  'find:start': {
+    request: { text: string; forward: boolean };
+    response: void;
+  };
+  'find:stop': {
+    request: void;
+    response: void;
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -156,6 +182,12 @@ export interface EventMap {
   'sync:changed': SyncStatus;
   /** Ask the renderer to focus and select the address bar (menu / Ctrl+L). */
   'ui:focus-address': null;
+  /** Window maximize state changed (for the maximize/restore button). */
+  'window:maximized': boolean;
+  /** Open the find-in-page bar (Ctrl+F). */
+  'ui:find': null;
+  /** Find-in-page result counts. */
+  'find:result': { matches: number; active: number };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -195,6 +227,12 @@ export const INVOKE_CHANNELS = [
   'update:check',
   'settings:get',
   'settings:set',
+  'window:minimize',
+  'window:toggleMaximize',
+  'window:close',
+  'window:isMaximized',
+  'find:start',
+  'find:stop',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -206,4 +244,7 @@ export const EVENT_CHANNELS = [
   'preset:changed',
   'sync:changed',
   'ui:focus-address',
+  'window:maximized',
+  'ui:find',
+  'find:result',
 ] as const satisfies readonly EventChannel[];

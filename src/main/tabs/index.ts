@@ -19,7 +19,8 @@ import { Ledger } from '../ledger';
 import { NetworkGuard } from '../network';
 import type { PresetConfig } from '../../ipc';
 
-const TOPBAR_HEIGHT = 76;
+// Must match the chrome CSS: title bar (40) + toolbar (48).
+const TOPBAR_HEIGHT = 88;
 const LEDGER_PANEL_WIDTH = 360;
 
 interface TabEntry {
@@ -62,11 +63,13 @@ export class TabManager {
     const win = new BrowserWindow({
       width: 1280,
       height: 840,
-      minWidth: 800,
+      minWidth: 940,
       minHeight: 600,
       title: 'Harbor',
       icon: iconPath,
-      backgroundColor: '#0f172a',
+      backgroundColor: '#0b1220',
+      // Frameless: Harbor draws its own title bar and window controls.
+      frame: false,
       webPreferences: {
         preload: preloadPath,
         contextIsolation: true,
@@ -85,6 +88,8 @@ export class TabManager {
     void win.loadFile(chromeHtmlPath);
 
     win.on('resize', () => this.layout());
+    win.on('maximize', () => win.webContents.send('window:maximized', true));
+    win.on('unmaximize', () => win.webContents.send('window:maximized', false));
     win.on('closed', () => {
       this.window = null;
     });
@@ -93,6 +98,33 @@ export class TabManager {
 
   chromeWebContents(): WebContents | null {
     return this.window?.webContents ?? null;
+  }
+
+  // --- window controls (custom title bar) ---
+  minimizeWindow(): void {
+    this.window?.minimize();
+  }
+  toggleMaximize(): void {
+    const win = this.window;
+    if (!win) return;
+    if (win.isMaximized()) win.unmaximize();
+    else win.maximize();
+  }
+  closeWindow(): void {
+    this.window?.close();
+  }
+  isMaximized(): boolean {
+    return this.window?.isMaximized() ?? false;
+  }
+
+  // --- find in page ---
+  findInActive(text: string, forward: boolean): void {
+    if (this.activeTabId === null || text.length === 0) return;
+    this.requireTab(this.activeTabId).view.webContents.findInPage(text, { forward, findNext: false });
+  }
+  stopFindActive(): void {
+    if (this.activeTabId === null) return;
+    this.requireTab(this.activeTabId).view.webContents.stopFindInPage('clearSelection');
   }
 
   /** Top-level URL of a tab — used by the network guard for first-party checks. */
@@ -175,6 +207,7 @@ export class TabManager {
       else if (input.alt && key === 'arrowleft') this.backActive();
       else if (input.alt && key === 'arrowright') this.forwardActive();
       else if ((mod && input.shift && key === 'i') || key === 'f12') this.toggleDevToolsActive();
+      else if (mod && key === 'f') this.window?.webContents.send('ui:find', null);
       else handled = false;
       if (handled) {
         event.preventDefault();
@@ -216,6 +249,12 @@ export class TabManager {
         entry.url = navUrl;
         update();
       }
+    });
+    wc.on('found-in-page', (_e, result) => {
+      this.window?.webContents.send('find:result', {
+        matches: result.matches,
+        active: result.activeMatchOrdinal,
+      });
     });
     // Open target=_blank / window.open in a new tab in the same compartment.
     wc.setWindowOpenHandler(({ url }) => {

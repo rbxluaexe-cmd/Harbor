@@ -1,10 +1,11 @@
 /**
  * Harbor chrome UI (renderer).
  *
- * Framework-light, dependency-free. It talks to the main process exclusively
- * through the typed `window.harbor` bridge and renders the tab bar, compartment
- * switcher, the runtime privacy ledger, and settings. Untrusted strings (page
- * titles, URLs) are only ever assigned via `textContent`, never `innerHTML`.
+ * Framework-light, dependency-free. Talks to main only through the typed
+ * `window.harbor` bridge. Renders a custom frameless title bar with window
+ * controls, the tab strip, the toolbar, the find bar, the runtime privacy
+ * ledger, and settings. Untrusted strings (titles/URLs) are only ever assigned
+ * via textContent.
  */
 import type {
   BootstrapState,
@@ -47,7 +48,7 @@ const state: UiState = {
   ledgerByTab: new Map(),
 };
 
-// --- tiny DOM helper ---------------------------------------------------------
+// --- DOM helpers -------------------------------------------------------------
 
 type Attrs = Record<string, string | number | boolean | EventListener | undefined>;
 
@@ -59,27 +60,37 @@ function el<K extends keyof HTMLElementTagNameMap>(
   const node = document.createElement(tag);
   for (const [key, value] of Object.entries(attrs)) {
     if (value === undefined) continue;
-    if (key === 'class') {
-      node.className = String(value);
-    } else if (key === 'text') {
-      node.textContent = String(value);
-    } else if (key === 'style') {
-      // Set via the CSSOM rather than a style attribute: CSP's style-src does
-      // not govern CSSOM writes, so this keeps the strict policy intact.
-      node.style.cssText = String(value);
-    } else if (key.startsWith('on') && typeof value === 'function') {
-      node.addEventListener(key.slice(2), value as EventListener);
-    } else if (typeof value === 'boolean') {
-      if (value) node.setAttribute(key, '');
-    } else {
-      node.setAttribute(key, String(value));
-    }
+    if (key === 'class') node.className = String(value);
+    else if (key === 'text') node.textContent = String(value);
+    else if (key === 'style') node.style.cssText = String(value);
+    else if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2), value as EventListener);
+    else if (typeof value === 'boolean') { if (value) node.setAttribute(key, ''); }
+    else node.setAttribute(key, String(value));
   }
-  for (const child of children) {
-    node.append(child);
-  }
+  for (const child of children) node.append(child);
   return node;
 }
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function icon(d: string | string[], viewBox = '0 0 24 24'): SVGSVGElement {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', viewBox);
+  for (const path of Array.isArray(d) ? d : [d]) {
+    const p = document.createElementNS(SVG_NS, 'path');
+    p.setAttribute('d', path);
+    svg.appendChild(p);
+  }
+  return svg;
+}
+
+const ICONS = {
+  back: 'M15 6l-6 6 6 6',
+  forward: 'M9 6l6 6-6 6',
+  reload: ['M21 12a9 9 0 1 1-2.6-6.4', 'M21 4v4h-4'],
+  shield: 'M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6l7-3z',
+  lock: ['M5 11h14v9H5z', 'M8 11V8a4 4 0 0 1 8 0v3'],
+  search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M20 20l-3.5-3.5'],
+};
 
 function $(id: string): HTMLElement {
   const node = document.getElementById(id);
@@ -92,57 +103,51 @@ function $(id: string): HTMLElement {
 function activeTab(): TabInfo | null {
   return state.tabs.find((t) => t.id === state.activeTabId) ?? null;
 }
-
 function compartmentFor(id: string): Compartment | undefined {
   return state.compartments.find((c) => c.id === id);
 }
-
 function activeSnapshot(): LedgerSnapshot | null {
   return state.activeTabId === null ? null : state.ledgerByTab.get(state.activeTabId) ?? null;
 }
-
 async function invoke<T>(p: Promise<T>): Promise<T | null> {
-  try {
-    return await p;
-  } catch (err) {
-    console.error('Harbor IPC error', err);
-    return null;
-  }
+  try { return await p; } catch (err) { console.error('Harbor IPC error', err); return null; }
 }
 
-// --- tab strip ---------------------------------------------------------------
+// --- title bar: tabs + window controls --------------------------------------
 
 function renderTabs(): void {
-  const strip = $('tabstrip');
+  const strip = $('tabs');
   strip.replaceChildren();
   for (const tab of state.tabs) {
     const compartment = compartmentFor(tab.compartmentId);
-    const chip = el('div', { class: `tab${tab.id === state.activeTabId ? ' active' : ''}` }, [
+    const close = el('span', { class: 'close', title: 'Close tab', onclick: (e: Event) => { e.stopPropagation(); void closeTab(tab.id); } });
+    close.append(icon('M5 5l8 8M13 5l-8 8', '0 0 18 18'));
+    const chip = el('div', { class: `tab${tab.id === state.activeTabId ? ' active' : ''}`, title: tab.url }, [
       el('span', { class: 'dot', style: `background:${compartment?.color ?? '#888'}` }),
-      el('span', { class: 'title', text: tab.title || tab.url || 'New Tab', title: tab.url }),
-      el('span', {
-        class: 'close',
-        text: '✕',
-        onclick: (e: Event) => {
-          e.stopPropagation();
-          void closeTab(tab.id);
-        },
-      }),
+      el('span', { class: 'title', text: tab.title || 'New Tab' }),
+      close,
     ]);
-    chip.addEventListener('click', () => {
-      void selectTab(tab.id);
-    });
+    chip.addEventListener('click', () => { void selectTab(tab.id); });
     strip.append(chip);
   }
-  strip.append(
-    el('button', {
-      class: 'tab-add',
-      text: '+',
-      title: 'New tab',
-      onclick: () => {
-        void newTab();
-      },
-    }),
+}
+
+let maxButton: HTMLElement;
+function wireWindowControls(): void {
+  const ctrls = $('winctrls');
+  maxButton = ctrls.querySelector('[data-win="max"]') as HTMLElement;
+  (ctrls.querySelector('[data-win="min"]') as HTMLElement).addEventListener('click', () => void harbor.invoke('window:minimize'));
+  maxButton.addEventListener('click', () => void harbor.invoke('window:toggleMaximize'));
+  (ctrls.querySelector('[data-win="close"]') as HTMLElement).addEventListener('click', () => void harbor.invoke('window:close'));
+  $('newtab').addEventListener('click', () => { void newTab(); });
+}
+
+function setMaximized(maxed: boolean): void {
+  // Restore icon = two offset squares; maximize icon = single square.
+  maxButton.replaceChildren(
+    maxed
+      ? icon(['M3.5 4.5h5v5h-5z', 'M5.5 4.5v-1h5v5h-1'], '0 0 12 12')
+      : icon('M2.5 2.5h7v7h-7z', '0 0 12 12'),
   );
 }
 
@@ -153,58 +158,104 @@ let urlInput: HTMLInputElement;
 function buildToolbar(): void {
   const toolbar = $('toolbar');
   toolbar.replaceChildren();
+  const active = activeTab();
 
-  const back = el('button', { class: 'nav-btn', text: '‹', title: 'Back', onclick: () => navBack() });
-  const fwd = el('button', { class: 'nav-btn', text: '›', title: 'Forward', onclick: () => navFwd() });
-  const reload = el('button', { class: 'nav-btn', text: '⟳', title: 'Reload', onclick: () => navReload() });
+  const back = navButton(ICONS.back, 'Back (Alt+Left)', () => navBack());
+  const fwd = navButton(ICONS.forward, 'Forward (Alt+Right)', () => navFwd());
+  const reload = navButton(ICONS.reload, 'Reload (Ctrl+R)', () => navReload());
 
   urlInput = el('input', {
     id: 'url',
     type: 'text',
     placeholder: 'Search or enter address',
     spellcheck: false,
-    onkeydown: (e: Event) => {
-      if ((e as KeyboardEvent).key === 'Enter') {
-        void go(urlInput.value);
-      }
-    },
+    onkeydown: (e: Event) => { if ((e as KeyboardEvent).key === 'Enter') void go(urlInput.value); },
   }) as HTMLInputElement;
-
-  const compartmentSelect = el('select', {
-    id: 'compartment-select',
-    title: 'Compartment for this tab',
-    onchange: (e: Event) => {
-      void reassign((e.target as HTMLSelectElement).value);
-    },
-  });
-  for (const c of state.compartments) {
-    compartmentSelect.append(
-      el('option', { value: c.id }, [`${c.name}${c.persistent ? '' : ' (ephemeral)'}`]),
-    );
-  }
-  const active = activeTab();
-  if (active) (compartmentSelect as HTMLSelectElement).value = active.compartmentId;
+  const lock = el('span', { class: 'lock', title: 'Connection isolated in compartment' });
+  lock.append(icon(ICONS.lock));
+  const urlwrap = el('div', { id: 'urlwrap' }, [lock, urlInput]);
 
   const score = activeSnapshot()?.score;
-  const scoreBadge = el('span', { class: 'badge', title: 'Runtime privacy score' }, [
-    el('span', { class: `score ${score?.grade ?? ''}`, text: score ? `${score.grade} ${score.value}` : '—' }),
+  const scoreBadge = el('div', { class: `score ${score?.grade ?? ''}`, title: 'Runtime privacy score' }, [
+    el('span', { class: 'grade', text: score ? score.grade : '–' }),
+    el('span', { class: 'muted', text: score ? String(score.value) : '' }),
   ]);
 
-  const panelToggle = el('button', {
-    title: 'Toggle privacy panel',
-    text: '🛡',
-    onclick: () => {
-      void togglePanel();
-    },
+  const compartmentSelect = el('select', {
+    id: 'compartment',
+    title: 'Compartment for this tab',
+    onchange: (e: Event) => void reassign((e.target as HTMLSelectElement).value),
   });
+  for (const c of state.compartments) {
+    compartmentSelect.append(el('option', { value: c.id }, [c.name]));
+  }
+  if (active) (compartmentSelect as HTMLSelectElement).value = active.compartmentId;
 
-  toolbar.append(back, fwd, reload, urlInput, compartmentSelect, scoreBadge, panelToggle);
+  const shield = el('button', {
+    class: `tool-btn${state.settings.showLedgerPanel ? ' on' : ''}`,
+    title: 'Privacy panel',
+    onclick: () => void togglePanel(),
+  });
+  shield.append(icon(ICONS.shield));
+
+  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, shield);
 
   back.toggleAttribute('disabled', !active?.canGoBack);
   fwd.toggleAttribute('disabled', !active?.canGoForward);
-  if (active && document.activeElement !== urlInput) {
-    urlInput.value = active.url;
-  }
+  if (active && document.activeElement !== urlInput) urlInput.value = active.url;
+}
+
+function navButton(path: string | string[], title: string, onclick: () => void): HTMLButtonElement {
+  const b = el('button', { class: 'nav-btn', title, onclick });
+  b.append(icon(path));
+  return b;
+}
+
+// --- find bar ----------------------------------------------------------------
+
+let findInput: HTMLInputElement;
+let findCount: HTMLElement;
+
+function buildFindBar(): void {
+  const bar = $('findbar');
+  findInput = el('input', {
+    type: 'text',
+    placeholder: 'Find in page',
+    spellcheck: false,
+    oninput: () => doFind(true),
+    onkeydown: (e: Event) => {
+      const ev = e as KeyboardEvent;
+      if (ev.key === 'Enter') doFind(!ev.shiftKey);
+      else if (ev.key === 'Escape') closeFind();
+    },
+  }) as HTMLInputElement;
+  findCount = el('span', { class: 'count', text: '' });
+  const prev = el('button', { title: 'Previous (Shift+Enter)', onclick: () => doFind(false) });
+  prev.append(icon('M18 15l-6-6-6 6'));
+  const next = el('button', { title: 'Next (Enter)', onclick: () => doFind(true) });
+  next.append(icon('M6 9l6 6 6-6'));
+  const close = el('button', { title: 'Close (Esc)', onclick: () => closeFind() });
+  close.append(icon('M6 6l12 12M18 6L6 18'));
+  const search = el('span', { class: 'lock', style: 'color:var(--fg-dim)' });
+  search.append(icon(ICONS.search));
+  bar.replaceChildren(search, findInput, findCount, prev, next, close);
+}
+
+function openFind(): void {
+  $('findbar').removeAttribute('hidden');
+  findInput.focus();
+  findInput.select();
+  if (findInput.value) doFind(true);
+}
+function closeFind(): void {
+  $('findbar').setAttribute('hidden', '');
+  findCount.textContent = '';
+  void harbor.invoke('find:stop');
+}
+function doFind(forward: boolean): void {
+  const text = findInput.value;
+  if (!text) { findCount.textContent = ''; void harbor.invoke('find:stop'); return; }
+  void harbor.invoke('find:start', { text, forward });
 }
 
 // --- panel -------------------------------------------------------------------
@@ -212,11 +263,8 @@ function buildToolbar(): void {
 function renderPanel(): void {
   const panel = $('panel');
   panel.toggleAttribute('hidden', !state.settings.showLedgerPanel);
-  if (!state.settings.showLedgerPanel) {
-    return;
-  }
+  if (!state.settings.showLedgerPanel) return;
   panel.replaceChildren();
-
   const tabs = el('div', { class: 'panel-tabs' }, [
     panelTabButton('Ledger', 'ledger'),
     panelTabButton('Settings', 'settings'),
@@ -224,7 +272,6 @@ function renderPanel(): void {
   ]);
   const body = el('div', { class: 'panel-body' });
   panel.append(tabs, body);
-
   if (state.panelMode === 'ledger') renderLedger(body);
   else if (state.panelMode === 'settings') renderSettings(body);
   else renderCompartments(body);
@@ -234,25 +281,17 @@ function panelTabButton(label: string, mode: PanelMode): HTMLElement {
   return el('button', {
     class: state.panelMode === mode ? 'active' : '',
     text: label,
-    onclick: () => {
-      state.panelMode = mode;
-      renderPanel();
-    },
+    onclick: () => { state.panelMode = mode; renderPanel(); },
   });
 }
 
 function renderLedger(body: HTMLElement): void {
   const snap = activeSnapshot();
-  if (!snap) {
-    body.append(el('p', { class: 'muted', text: 'No activity recorded for this tab yet.' }));
-    return;
-  }
+  if (!snap) { body.append(el('p', { class: 'muted', text: 'No activity recorded for this tab yet.' })); return; }
   const s = snap.score;
+  const ring = el('div', { class: 'ring', style: `--p:${s.value}` }, [el('span', { class: `score ${s.grade}` }, [el('span', { class: 'grade', text: String(s.value) })])]);
   body.append(
-    el('div', { class: 'score-header' }, [
-      el('div', { class: `value score ${s.grade}`, text: String(s.value) }),
-      el('div', { class: 'muted', text: `Grade ${s.grade} · live from this page's behaviour` }),
-    ]),
+    el('div', { class: 'score-card' }, [ring, el('div', { class: 'grade-line', text: `Grade ${s.grade} · live from this page's behaviour` })]),
     el('div', { class: 'stat-grid' }, [
       stat(s.totalRequests, 'requests'),
       stat(s.blockedRequests, 'blocked'),
@@ -262,78 +301,37 @@ function renderLedger(body: HTMLElement): void {
       stat(s.fingerprintAttempts, 'fingerprint hits'),
     ]),
   );
-  const recent = [...snap.entries].reverse().slice(0, 100);
-  for (const entry of recent) {
-    body.append(
-      el('div', { class: `entry ${entry.disposition}` }, [
-        el('div', { class: 'summary', text: entry.summary }),
-        el('div', { class: 'meta', text: `${entry.resourceType} · ${new Date(entry.timestamp).toLocaleTimeString()}` }),
-      ]),
-    );
+  for (const entry of [...snap.entries].reverse().slice(0, 100)) {
+    body.append(el('div', { class: `entry ${entry.disposition}` }, [
+      el('div', { class: 'summary', text: entry.summary }),
+      el('div', { class: 'meta', text: `${entry.resourceType} · ${new Date(entry.timestamp).toLocaleTimeString()}` }),
+    ]));
   }
 }
 
 function stat(n: number, label: string): HTMLElement {
-  return el('div', { class: 'stat' }, [
-    el('div', { class: 'n', text: String(n) }),
-    el('div', { class: 'l', text: label }),
-  ]);
+  return el('div', { class: 'stat' }, [el('div', { class: 'n', text: String(n) }), el('div', { class: 'l', text: label })]);
 }
 
 function renderSettings(body: HTMLElement): void {
-  // Presets
   const presetSection = el('div', { class: 'section' }, [el('h3', { text: 'Threat-model preset' })]);
   for (const p of state.presets) {
     const card = el('div', { class: `preset${p.active ? ' active' : ''}` }, [
       el('div', { class: 'name', text: p.name }),
       el('div', { class: 'desc', text: p.description }),
     ]);
-    card.addEventListener('click', () => {
-      void applyPreset(p.name);
-    });
+    card.addEventListener('click', () => { void applyPreset(p.name); });
     presetSection.append(card);
   }
 
-  // Homepage
-  const homeInput = el('input', {
-    type: 'text',
-    value: state.settings.homepage,
-    placeholder: 'Empty = Harbor start page',
-  }) as HTMLInputElement;
+  const homeInput = el('input', { type: 'text', value: state.settings.homepage, placeholder: 'Empty = Harbor start page' }) as HTMLInputElement;
   const homeSection = el('div', { class: 'section' }, [
     el('h3', { text: 'General' }),
-    el('div', { class: 'field' }, [
-      el('label', { text: 'Homepage' }),
-      homeInput,
-      el('button', {
-        text: 'Save homepage',
-        onclick: () => {
-          void saveSettings({ homepage: homeInput.value });
-        },
-      }),
-    ]),
+    el('div', { class: 'field' }, [el('label', { text: 'Homepage' }), homeInput,
+      el('button', { class: 'btn', text: 'Save homepage', onclick: () => void saveSettings({ homepage: homeInput.value }) })]),
   ]);
 
-  // Sync
-  const syncSection = renderSyncSection();
-
-  // Duress
-  const duressSection = renderDuressSection();
-
-  // Update
-  const updateOut = el('div', { class: 'muted', text: 'Not checked yet.' });
-  const updateSection = el('div', { class: 'section' }, [
-    el('h3', { text: 'Binary transparency' }),
-    el('button', {
-      text: 'Check for signed update',
-      onclick: () => {
-        void checkUpdate(updateOut);
-      },
-    }),
-    updateOut,
-  ]);
-
-  body.append(presetSection, homeSection, syncSection, duressSection, updateSection);
+  body.append(presetSection, homeSection, renderSyncSection(), renderDuressSection(), renderUpdateSection());
 }
 
 function renderSyncSection(): HTMLElement {
@@ -342,25 +340,20 @@ function renderSyncSection(): HTMLElement {
     const last = state.sync.lastSyncedAt ? new Date(state.sync.lastSyncedAt).toLocaleString() : 'never';
     section.append(
       el('div', { class: 'muted', text: `Enabled · last synced: ${last}` }),
-      el('div', { class: 'row', style: 'margin-top:8px' }, [
-        el('button', { text: 'Push', onclick: () => void doSync('push') }),
-        el('button', { text: 'Pull', onclick: () => void doSync('pull') }),
-        el('button', { text: 'Disable', onclick: () => void disableSync() }),
+      el('div', { class: 'row', style: 'margin-top:10px' }, [
+        el('button', { class: 'btn', text: 'Push', onclick: () => void doSync('push') }),
+        el('button', { class: 'btn', text: 'Pull', onclick: () => void doSync('pull') }),
+        el('button', { class: 'btn', text: 'Disable', onclick: () => void disableSync() }),
       ]),
     );
   } else {
     const pwd = el('input', { type: 'password', placeholder: 'Master password (min 8)' }) as HTMLInputElement;
-    const url = el('input', { type: 'text', placeholder: 'Server URL (e.g. https://sync.example)' }) as HTMLInputElement;
+    const url = el('input', { type: 'text', placeholder: 'Server URL' }) as HTMLInputElement;
     section.append(
-      el('div', { class: 'muted', text: 'Keys are derived locally with Argon2id; the server only ever sees ciphertext.' }),
-      el('div', { class: 'field', style: 'margin-top:8px' }, [el('label', { text: 'Master password' }), pwd]),
+      el('div', { class: 'muted', text: 'Keys are derived locally with Argon2id; the server only sees ciphertext.' }),
+      el('div', { class: 'field', style: 'margin-top:10px' }, [el('label', { text: 'Master password' }), pwd]),
       el('div', { class: 'field' }, [el('label', { text: 'Server URL' }), url]),
-      el('button', {
-        text: 'Enable sync',
-        onclick: () => {
-          void enableSync(pwd.value, url.value);
-        },
-      }),
+      el('button', { class: 'btn primary', text: 'Enable sync', onclick: () => void enableSync(pwd.value, url.value) }),
     );
   }
   return section;
@@ -373,96 +366,69 @@ function renderDuressSection(): HTMLElement {
   enabled.checked = d.enabled;
   const decoy = el('select', {}) as HTMLSelectElement;
   decoy.append(el('option', { value: '' }, ['No decoy switch']));
-  for (const c of state.compartments) {
-    decoy.append(el('option', { value: c.id }, [c.name]));
-  }
+  for (const c of state.compartments) decoy.append(el('option', { value: c.id }, [c.name]));
   decoy.value = d.decoyCompartmentId ?? '';
-
   return el('div', { class: 'section' }, [
     el('h3', { text: 'Duress / panic mode' }),
     el('div', { class: 'muted', text: 'A global hotkey instantly wipes storage and can switch to a decoy compartment.' }),
-    el('div', { class: 'field', style: 'margin-top:8px' }, [el('label', { text: 'Hotkey' }), accel]),
+    el('div', { class: 'field', style: 'margin-top:10px' }, [el('label', { text: 'Hotkey' }), accel]),
     el('div', { class: 'field' }, [el('label', { text: 'Decoy compartment' }), decoy]),
     el('label', { class: 'row' }, [enabled, el('span', { text: ' Arm duress hotkey' })]),
-    el('div', { class: 'row', style: 'margin-top:8px' }, [
-      el('button', {
-        text: 'Save duress config',
-        onclick: () => {
-          void saveDuress({
-            accelerator: accel.value,
-            wipeCompartments: [],
-            decoyCompartmentId: decoy.value || null,
-            enabled: enabled.checked,
-          });
-        },
-      }),
-      el('button', { text: 'Test wipe now', onclick: () => void harbor.invoke('duress:trigger') }),
+    el('div', { class: 'row', style: 'margin-top:10px' }, [
+      el('button', { class: 'btn', text: 'Save', onclick: () => void saveDuress({ accelerator: accel.value, wipeCompartments: [], decoyCompartmentId: decoy.value || null, enabled: enabled.checked }) }),
+      el('button', { class: 'btn', text: 'Test wipe', onclick: () => void harbor.invoke('duress:trigger') }),
     ]),
   ]);
 }
 
+function renderUpdateSection(): HTMLElement {
+  const out = el('div', { class: 'muted', text: 'Not checked yet.', style: 'margin-top:8px' });
+  return el('div', { class: 'section' }, [
+    el('h3', { text: 'Binary transparency' }),
+    el('button', { class: 'btn', text: 'Check for signed update', onclick: () => void checkUpdate(out) }),
+    out,
+  ]);
+}
+
 function renderCompartments(body: HTMLElement): void {
-  body.append(el('h3', { text: 'Compartments' }));
+  body.append(el('h3', { text: 'Compartments', style: 'margin-bottom:12px' }));
   for (const c of state.compartments) {
-    body.append(
-      el('div', { class: 'preset' }, [
-        el('div', { class: 'row' }, [
-          el('span', { class: 'dot', style: `background:${c.color};width:10px;height:10px;border-radius:50%;display:inline-block` }),
-          el('span', { class: 'name', text: c.name }),
-          el('span', { class: 'pill', text: c.persistent ? 'persistent' : 'ephemeral' }),
-        ]),
-        el('div', { class: 'row', style: 'margin-top:6px' }, [
-          el('button', { text: 'New tab here', onclick: () => void newTab(c.id) }),
-          c.builtin
-            ? el('span', { class: 'muted', text: 'built-in' })
-            : el('button', { text: 'Delete', onclick: () => void removeCompartment(c.id) }),
-        ]),
+    body.append(el('div', { class: 'preset' }, [
+      el('div', { class: 'row' }, [
+        el('span', { class: 'dot-inline', style: `background:${c.color}` }),
+        el('span', { class: 'name', text: c.name }),
+        el('span', { class: 'pill', text: c.persistent ? 'persistent' : 'ephemeral' }),
       ]),
-    );
+      el('div', { class: 'row', style: 'margin-top:8px' }, [
+        el('button', { class: 'btn', text: 'New tab here', onclick: () => void newTab(c.id) }),
+        c.builtin ? el('span', { class: 'muted', text: 'built-in' }) : el('button', { class: 'btn', text: 'Delete', onclick: () => void removeCompartment(c.id) }),
+      ]),
+    ]));
   }
   const name = el('input', { type: 'text', placeholder: 'Name' }) as HTMLInputElement;
   const persistent = el('input', { type: 'checkbox' }) as HTMLInputElement;
   persistent.checked = true;
-  body.append(
-    el('div', { class: 'section', style: 'margin-top:14px' }, [
-      el('h3', { text: 'New compartment' }),
-      el('div', { class: 'field' }, [el('label', { text: 'Name' }), name]),
-      el('label', { class: 'row' }, [persistent, el('span', { text: ' Persistent (survives restart)' })]),
-      el('button', {
-        text: 'Create',
-        style: 'margin-top:8px',
-        onclick: () => {
-          void createCompartment(name.value, persistent.checked);
-        },
-      }),
-    ]),
-  );
+  body.append(el('div', { class: 'section', style: 'margin-top:16px' }, [
+    el('h3', { text: 'New compartment' }),
+    el('div', { class: 'field' }, [el('label', { text: 'Name' }), name]),
+    el('label', { class: 'row' }, [persistent, el('span', { text: ' Persistent (survives restart)' })]),
+    el('button', { class: 'btn primary', text: 'Create', style: 'margin-top:10px', onclick: () => void createCompartment(name.value, persistent.checked) }),
+  ]));
 }
 
 // --- actions -----------------------------------------------------------------
 
 async function newTab(compartmentId?: string): Promise<void> {
-  const tab = await invoke(
-    compartmentId ? harbor.invoke('tabs:create', { compartmentId }) : harbor.invoke('tabs:create', {}),
-  );
-  if (tab) {
-    state.activeTabId = tab.id;
-    await refreshTabs();
-  }
+  const tab = await invoke(compartmentId ? harbor.invoke('tabs:create', { compartmentId }) : harbor.invoke('tabs:create', {}));
+  if (tab) { state.activeTabId = tab.id; await refreshTabs(); }
 }
-
-async function closeTab(id: number): Promise<void> {
-  await invoke(harbor.invoke('tabs:close', { tabId: id }));
-  await refreshTabs();
-}
-
+async function closeTab(id: number): Promise<void> { await invoke(harbor.invoke('tabs:close', { tabId: id })); await refreshTabs(); }
 async function selectTab(id: number): Promise<void> {
   state.activeTabId = id;
   await invoke(harbor.invoke('tabs:activate', { tabId: id }));
   await loadLedger(id);
   renderAll();
 }
-
 async function reassign(compartmentId: string): Promise<void> {
   const active = activeTab();
   if (!active || active.compartmentId === compartmentId) return;
@@ -470,53 +436,30 @@ async function reassign(compartmentId: string): Promise<void> {
   if (tab) state.activeTabId = tab.id;
   await refreshTabs();
 }
-
 async function go(value: string): Promise<void> {
-  if (state.activeTabId === null) {
-    await newTab();
-  }
+  if (state.activeTabId === null) await newTab();
   if (state.activeTabId === null) return;
   await invoke(harbor.invoke('tabs:navigate', { tabId: state.activeTabId, url: value }));
+  urlInput.blur();
 }
+function navBack(): void { if (state.activeTabId !== null) void harbor.invoke('tabs:goBack', { tabId: state.activeTabId }); }
+function navFwd(): void { if (state.activeTabId !== null) void harbor.invoke('tabs:goForward', { tabId: state.activeTabId }); }
+function navReload(): void { if (state.activeTabId !== null) void harbor.invoke('tabs:reload', { tabId: state.activeTabId }); }
 
-function navBack(): void {
-  if (state.activeTabId !== null) void harbor.invoke('tabs:goBack', { tabId: state.activeTabId });
-}
-function navFwd(): void {
-  if (state.activeTabId !== null) void harbor.invoke('tabs:goForward', { tabId: state.activeTabId });
-}
-function navReload(): void {
-  if (state.activeTabId !== null) void harbor.invoke('tabs:reload', { tabId: state.activeTabId });
-}
-
-async function togglePanel(): Promise<void> {
-  const next = !state.settings.showLedgerPanel;
-  await saveSettings({ showLedgerPanel: next });
-}
-
+async function togglePanel(): Promise<void> { await saveSettings({ showLedgerPanel: !state.settings.showLedgerPanel }); }
 async function applyPreset(name: string): Promise<void> {
   const presets = await invoke(harbor.invoke('presets:apply', { name }));
   if (presets) state.presets = presets;
   await syncBootstrapBits();
   renderAll();
 }
-
 async function saveSettings(patch: Partial<Settings>): Promise<void> {
   const s = await invoke(harbor.invoke('settings:set', { patch }));
   if (s) state.settings = s;
   renderAll();
 }
-
-async function enableSync(password: string, serverUrl: string): Promise<void> {
-  const s = await invoke(harbor.invoke('sync:enable', { password, serverUrl }));
-  if (s) state.sync = s;
-  renderPanel();
-}
-async function disableSync(): Promise<void> {
-  const s = await invoke(harbor.invoke('sync:disable'));
-  if (s) state.sync = s;
-  renderPanel();
-}
+async function enableSync(password: string, serverUrl: string): Promise<void> { const s = await invoke(harbor.invoke('sync:enable', { password, serverUrl })); if (s) state.sync = s; renderPanel(); }
+async function disableSync(): Promise<void> { const s = await invoke(harbor.invoke('sync:disable')); if (s) state.sync = s; renderPanel(); }
 async function doSync(dir: 'push' | 'pull'): Promise<void> {
   const res = await invoke(dir === 'push' ? harbor.invoke('sync:push') : harbor.invoke('sync:pull'));
   if (res) window.alert(res.message);
@@ -524,90 +467,44 @@ async function doSync(dir: 'push' | 'pull'): Promise<void> {
   if (s) state.sync = s;
   renderPanel();
 }
-
-async function saveDuress(config: DuressConfig): Promise<void> {
-  const status = await invoke(harbor.invoke('duress:configure', { config }));
-  if (status) state.duress = status.config;
-  renderPanel();
-}
-
+async function saveDuress(config: DuressConfig): Promise<void> { const status = await invoke(harbor.invoke('duress:configure', { config })); if (status) state.duress = status.config; renderPanel(); }
 async function checkUpdate(out: HTMLElement): Promise<void> {
   out.textContent = 'Checking…';
   const status = await invoke(harbor.invoke('update:check'));
-  if (!status) {
-    out.textContent = 'Check failed.';
-    return;
-  }
-  out.textContent = `${status.message} (signature ${status.signatureVerified ? 'verified' : 'unverified'})`;
+  out.textContent = status ? `${status.message} (signature ${status.signatureVerified ? 'verified' : 'unverified'})` : 'Check failed.';
 }
-
 async function createCompartment(name: string, persistent: boolean): Promise<void> {
   if (!name.trim()) return;
   await invoke(harbor.invoke('compartments:create', { name, color: '', persistent }));
   await refreshCompartments();
 }
-
-async function removeCompartment(id: string): Promise<void> {
-  await invoke(harbor.invoke('compartments:remove', { id }));
-  await refreshCompartments();
-}
+async function removeCompartment(id: string): Promise<void> { await invoke(harbor.invoke('compartments:remove', { id })); await refreshCompartments(); }
 
 // --- refresh / data ----------------------------------------------------------
 
-async function refreshTabs(): Promise<void> {
-  const tabs = await invoke(harbor.invoke('tabs:list'));
-  if (tabs) state.tabs = tabs;
-  ensureActiveTab();
-  renderAll();
-}
-
-async function refreshCompartments(): Promise<void> {
-  const list = await invoke(harbor.invoke('compartments:list'));
-  if (list) state.compartments = list;
-  renderAll();
-}
-
-async function loadLedger(tabId: number): Promise<void> {
-  const snap = await invoke(harbor.invoke('ledger:get', { tabId }));
-  if (snap) state.ledgerByTab.set(tabId, snap);
-}
-
+async function refreshTabs(): Promise<void> { const tabs = await invoke(harbor.invoke('tabs:list')); if (tabs) state.tabs = tabs; ensureActiveTab(); renderAll(); }
+async function refreshCompartments(): Promise<void> { const list = await invoke(harbor.invoke('compartments:list')); if (list) state.compartments = list; renderAll(); }
+async function loadLedger(tabId: number): Promise<void> { const snap = await invoke(harbor.invoke('ledger:get', { tabId })); if (snap) state.ledgerByTab.set(tabId, snap); }
 async function syncBootstrapBits(): Promise<void> {
   const [sync, duress, settings] = await Promise.all([
-    invoke(harbor.invoke('sync:status')),
-    invoke(harbor.invoke('duress:status')),
-    invoke(harbor.invoke('settings:get')),
+    invoke(harbor.invoke('sync:status')), invoke(harbor.invoke('duress:status')), invoke(harbor.invoke('settings:get')),
   ]);
   if (sync) state.sync = sync;
   if (duress) state.duress = duress.config;
   if (settings) state.settings = settings;
 }
-
 function ensureActiveTab(): void {
-  if (state.activeTabId !== null && state.tabs.some((t) => t.id === state.activeTabId)) {
-    return;
-  }
+  if (state.activeTabId !== null && state.tabs.some((t) => t.id === state.activeTabId)) return;
   const last = state.tabs[state.tabs.length - 1];
   state.activeTabId = last ? last.id : null;
 }
 
-// --- render orchestration ----------------------------------------------------
-
-function renderAll(): void {
-  renderTabs();
-  buildToolbar();
-  renderPanel();
-}
+function renderAll(): void { renderTabs(); buildToolbar(); renderPanel(); }
 
 // --- events ------------------------------------------------------------------
 
 function subscribe(): void {
-  harbor.on('tabs:list-changed', (list) => {
-    state.tabs = list;
-    ensureActiveTab();
-    renderTabs();
-    buildToolbar();
-  });
+  harbor.on('tabs:list-changed', (list) => { state.tabs = list; ensureActiveTab(); renderTabs(); buildToolbar(); });
   harbor.on('tabs:updated', (info) => {
     state.tabs = state.tabs.map((t) => (t.id === info.id ? info : t));
     renderTabs();
@@ -615,40 +512,27 @@ function subscribe(): void {
   });
   harbor.on('ledger:updated', (snap) => {
     state.ledgerByTab.set(snap.tabId, snap);
-    if (snap.tabId === state.activeTabId) {
-      buildToolbar();
-      if (state.panelMode === 'ledger') renderPanel();
-    }
+    if (snap.tabId === state.activeTabId) { buildToolbar(); if (state.panelMode === 'ledger') renderPanel(); }
   });
-  harbor.on('compartments:changed', (list) => {
-    state.compartments = list;
-    renderAll();
-  });
-  harbor.on('preset:changed', (presets) => {
-    state.presets = presets;
-    void syncBootstrapBits().then(renderAll);
-  });
-  harbor.on('sync:changed', (status) => {
-    state.sync = status;
-    if (state.panelMode === 'settings') renderPanel();
-  });
-  harbor.on('ui:focus-address', () => {
-    urlInput.focus();
-    urlInput.select();
-  });
+  harbor.on('compartments:changed', (list) => { state.compartments = list; renderAll(); });
+  harbor.on('preset:changed', (presets) => { state.presets = presets; void syncBootstrapBits().then(renderAll); });
+  harbor.on('sync:changed', (status) => { state.sync = status; if (state.panelMode === 'settings') renderPanel(); });
+  harbor.on('window:maximized', (maxed) => setMaximized(maxed));
+  harbor.on('ui:focus-address', () => { urlInput.focus(); urlInput.select(); });
+  harbor.on('ui:find', () => openFind());
+  harbor.on('find:result', ({ matches, active }) => { findCount.textContent = matches > 0 ? `${active}/${matches}` : 'No results'; });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
-    window.alert(
-      `Duress activated — wiped ${payload.wipedCompartments.length || 'all'} compartment(s)` +
-        (payload.decoyActivated ? ' and switched to decoy.' : '.'),
-    );
+    window.alert(`Duress activated — wiped ${payload.wipedCompartments.length || 'all'} compartment(s)${payload.decoyActivated ? ' and switched to decoy.' : '.'}`);
   });
 }
 
 // --- init --------------------------------------------------------------------
 
 async function init(): Promise<void> {
+  wireWindowControls();
+  buildFindBar();
   const boot = (await invoke(harbor.invoke('app:bootstrap'))) as BootstrapState | null;
   if (boot) {
     state.version = boot.version;
@@ -662,6 +546,8 @@ async function init(): Promise<void> {
   }
   subscribe();
   renderAll();
+  const maxed = await invoke(harbor.invoke('window:isMaximized'));
+  setMaximized(maxed ?? false);
 }
 
 void init();

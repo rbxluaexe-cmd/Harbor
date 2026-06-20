@@ -106,6 +106,24 @@ export function registerIpcRouter(m: RouterModules): void {
 
   handle('update:check', () => m.update.check());
 
+  handle('window:minimize', () => {
+    m.tabs.minimizeWindow();
+  });
+  handle('window:toggleMaximize', () => {
+    m.tabs.toggleMaximize();
+  });
+  handle('window:close', () => {
+    m.tabs.closeWindow();
+  });
+  handle('window:isMaximized', () => m.tabs.isMaximized());
+
+  handle('find:start', (req) => {
+    m.tabs.findInActive(req.text, req.forward);
+  });
+  handle('find:stop', () => {
+    m.tabs.stopFindActive();
+  });
+
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {
     const patch = req.patch;
