@@ -25,9 +25,13 @@ import { hostnameOf, isSameSite } from './domain';
 import { applyOdohProxy } from './secure-dns';
 import { applyWebRtcPolicy } from './webrtc';
 
+import type { SecurityConfig } from '../../ipc';
+import { stripTrackingParams, upgradeHttps } from '../security';
+
 export type ConfigGetter = () => PresetConfig;
 export type TabUrlResolver = (webContentsId: number) => string | null;
 export type PermissionDecider = (origin: string, permission: string) => boolean;
+export type SecurityGetter = () => SecurityConfig;
 
 function originOf(url: string): string {
   try {
@@ -46,6 +50,7 @@ export class NetworkGuard {
     private readonly config: ConfigGetter,
     private readonly getTabUrl: TabUrlResolver,
     private readonly decidePermission: PermissionDecider,
+    private readonly security: SecurityGetter,
   ) {}
 
   /** Configurator handed to the identity module; runs once per session. */
@@ -71,7 +76,7 @@ export class NetworkGuard {
 
   private async handleBeforeRequest(
     details: OnBeforeRequestListenerDetails,
-    callback: (response: { cancel: boolean }) => void,
+    callback: (response: { cancel?: boolean; redirectURL?: string }) => void,
   ): Promise<void> {
     const domain = hostnameOf(details.url);
     if (!domain) {
@@ -79,6 +84,29 @@ export class NetworkGuard {
       return;
     }
     const tabId = details.webContentsId ?? -1;
+
+    // Request-level security rewrites (this hook is the single owner of
+    // onBeforeRequest, so security rewrites live here).
+    const sec = this.security();
+    if (sec.blockHyperlinkAuditing && details.resourceType === 'ping') {
+      this.record(tabId, details, domain, null, 'blocked', 'tracker-blocklist');
+      callback({ cancel: true });
+      return;
+    }
+    if (sec.httpsUpgrade) {
+      const upgraded = upgradeHttps(details.url);
+      if (upgraded) {
+        callback({ redirectURL: upgraded });
+        return;
+      }
+    }
+    if (sec.stripTrackingParams) {
+      const cleaned = stripTrackingParams(details.url);
+      if (cleaned) {
+        callback({ redirectURL: cleaned });
+        return;
+      }
+    }
 
     if (details.resourceType === 'mainFrame') {
       this.record(tabId, details, domain, null, 'allowed', 'first-party');

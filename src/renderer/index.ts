@@ -17,6 +17,7 @@ import type {
   LedgerSnapshot,
   PermissionDecision,
   PresetSummary,
+  SecurityConfig,
   Settings,
   SitePermission,
   SyncStatus,
@@ -37,10 +38,17 @@ interface UiState {
   presets: readonly PresetSummary[];
   sync: SyncStatus;
   duress: DuressConfig;
+  security: SecurityConfig;
   activeTabId: number | null;
   panelMode: PanelMode;
   ledgerByTab: Map<number, LedgerSnapshot>;
 }
+
+const SECURITY_DEFAULTS: SecurityConfig = {
+  gpc: true, dnt: true, trimReferrer: true, removeClientHints: true, httpsUpgrade: false,
+  stripTrackingParams: true, blockHyperlinkAuditing: true, blockThirdPartyCookies: true,
+  spoofUserAgent: false, userAgent: '',
+};
 
 const state: UiState = {
   version: '',
@@ -52,6 +60,7 @@ const state: UiState = {
   presets: [],
   sync: { enabled: false, lastSyncedAt: null, pendingChanges: 0, serverConfigured: false },
   duress: { accelerator: '', wipeCompartments: [], decoyCompartmentId: null, enabled: false },
+  security: SECURITY_DEFAULTS,
   activeTabId: null,
   panelMode: 'ledger',
   ledgerByTab: new Map(),
@@ -688,7 +697,36 @@ function renderSettings(body: HTMLElement): void {
     el('button', { class: 'btn', style: 'margin-top:8px', text: 'Clear all browsing data', onclick: () => void clearBrowsing() }),
   ]);
 
-  body.append(presetSection, homeSection, privacy, renderPermManagerSection(), renderSyncSection(), renderDuressSection(), renderUpdateSection());
+  body.append(presetSection, homeSection, renderSecuritySection(), privacy, renderPermManagerSection(), renderSyncSection(), renderDuressSection(), renderUpdateSection());
+}
+
+function renderSecuritySection(): HTMLElement {
+  const s = state.security;
+  const ua = el('input', { type: 'text', value: s.userAgent, placeholder: 'Custom User-Agent string' }) as HTMLInputElement;
+  const section = el('div', { class: 'section' }, [
+    el('h3', { text: 'Security & anti-tracking' }),
+    toggleRow('Send Global Privacy Control (Sec-GPC)', s.gpc, (v) => void saveSecurity({ gpc: v })),
+    toggleRow('Send Do-Not-Track (DNT)', s.dnt, (v) => void saveSecurity({ dnt: v })),
+    toggleRow('Trim referrer to origin', s.trimReferrer, (v) => void saveSecurity({ trimReferrer: v })),
+    toggleRow('Strip X-Client-Data header', s.removeClientHints, (v) => void saveSecurity({ removeClientHints: v })),
+    toggleRow('Strip tracking parameters (utm, fbclid…)', s.stripTrackingParams, (v) => void saveSecurity({ stripTrackingParams: v })),
+    toggleRow('Block hyperlink auditing (pings)', s.blockHyperlinkAuditing, (v) => void saveSecurity({ blockHyperlinkAuditing: v })),
+    toggleRow('Block third-party cookies', s.blockThirdPartyCookies, (v) => void saveSecurity({ blockThirdPartyCookies: v })),
+    toggleRow('Upgrade HTTP → HTTPS', s.httpsUpgrade, (v) => void saveSecurity({ httpsUpgrade: v })),
+    toggleRow('Spoof User-Agent', s.spoofUserAgent, (v) => void saveSecurity({ spoofUserAgent: v })),
+    el('div', { class: 'field', style: 'margin-top:8px' }, [
+      el('label', { text: 'User-Agent (when spoofing)' }),
+      ua,
+      el('button', { class: 'btn', text: 'Save User-Agent', onclick: () => void saveSecurity({ userAgent: ua.value }) }),
+    ]),
+  ]);
+  return section;
+}
+
+async function saveSecurity(patch: Partial<SecurityConfig>): Promise<void> {
+  const cfg = await invoke(harbor.invoke('security:set', { patch }));
+  if (cfg) state.security = cfg;
+  if (state.panelMode === 'settings') renderPanel();
 }
 
 function renderSyncSection(): HTMLElement {
@@ -923,6 +961,7 @@ function subscribe(): void {
   harbor.on('history:changed', () => { if (state.panelMode === 'history') reloadHistory?.(); });
   harbor.on('downloads:changed', (list) => { state.downloads = list; buildToolbar(); renderDownloads(); });
   harbor.on('permissions:changed', (origin) => { void loadPermissions(origin); if (state.panelMode === 'settings') reloadPermManager?.(); });
+  harbor.on('security:changed', (cfg) => { state.security = cfg; });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
@@ -949,6 +988,8 @@ async function init(): Promise<void> {
   }
   const dls = await invoke(harbor.invoke('downloads:list'));
   if (dls) state.downloads = dls;
+  const sec = await invoke(harbor.invoke('security:get'));
+  if (sec) state.security = sec;
   if (state.activeTabId !== null) await loadLedger(state.activeTabId);
   subscribe();
   renderAll();

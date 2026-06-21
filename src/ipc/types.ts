@@ -219,6 +219,20 @@ export interface DownloadItem {
 /** Chrome colour theme. */
 export type Theme = 'dark' | 'light';
 
+/** Network/security hardening toggles applied at the request layer. */
+export interface SecurityConfig {
+  readonly gpc: boolean;
+  readonly dnt: boolean;
+  readonly trimReferrer: boolean;
+  readonly removeClientHints: boolean;
+  readonly httpsUpgrade: boolean;
+  readonly stripTrackingParams: boolean;
+  readonly blockHyperlinkAuditing: boolean;
+  readonly blockThirdPartyCookies: boolean;
+  readonly spoofUserAgent: boolean;
+  readonly userAgent: string;
+}
+
 /** User-facing settings independent of the active preset. */
 export interface Settings {
   readonly activePreset: string;

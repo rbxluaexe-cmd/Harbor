@@ -32,6 +32,7 @@ import { configureSecureDns } from './network/secure-dns';
 import { PermissionsManager } from './permissions';
 import { PresetManager } from './presets';
 import { ReaderManager } from './reader';
+import { SecurityGuard, SecurityStore } from './security';
 import { registerIpcRouter } from './ipc-router';
 import { SettingsStore } from './settings';
 import { SyncClient, type SyncDataProvider } from './sync';
@@ -133,14 +134,21 @@ function start(): void {
   // exists; the closure resolves it lazily once assigned below.
   let tabs: TabManager;
   const permissions = new PermissionsManager(bus);
+  const security = new SecurityStore(bus);
   const network = new NetworkGuard(
     bus,
     () => presets.current(),
     (id) => tabs.getTabUrl(id),
     permissions.decide,
+    () => security.get(),
+  );
+  const securityGuard = new SecurityGuard(
+    () => security.get(),
+    (id) => tabs.getTabUrl(id),
   );
   const downloads = new DownloadsManager(bus);
   compartments.registerSessionConfigurator(network.configureSession);
+  compartments.registerSessionConfigurator(securityGuard.configureSession);
   compartments.registerSessionConfigurator(downloads.attach);
 
   const fingerprint = new FingerprintShield(bus, () => presets.current());
@@ -213,7 +221,7 @@ function start(): void {
     persistSession: (openTabs) => session.save(openTabs),
   });
 
-  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history, downloads, permissions });
+  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history, downloads, permissions, security });
 
   const preloadPath = join(__dirname, '..', 'preload', 'index.js');
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');

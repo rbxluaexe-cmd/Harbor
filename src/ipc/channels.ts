@@ -18,6 +18,7 @@ import type {
   OriginPermissions,
   PermissionDecision,
   Preset,
+  SecurityConfig,
   PresetSummary,
   Settings,
   SitePermission,
@@ -256,6 +257,15 @@ export interface InvokeMap {
     request: { origin: string };
     response: readonly OriginPermissions[];
   };
+
+  'security:get': {
+    request: void;
+    response: SecurityConfig;
+  };
+  'security:set': {
+    request: { patch: Partial<SecurityConfig> };
+    response: SecurityConfig;
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -285,6 +295,8 @@ export interface EventMap {
   'downloads:changed': readonly DownloadItem[];
   /** A site's permissions changed (a request was seen or an override set). */
   'permissions:changed': string;
+  /** Security hardening config changed. */
+  'security:changed': SecurityConfig;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -349,6 +361,8 @@ export const INVOKE_CHANNELS = [
   'permissions:set',
   'permissions:all',
   'permissions:clearOrigin',
+  'security:get',
+  'security:set',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -368,4 +382,5 @@ export const EVENT_CHANNELS = [
   'history:changed',
   'downloads:changed',
   'permissions:changed',
+  'security:changed',
 ] as const satisfies readonly EventChannel[];

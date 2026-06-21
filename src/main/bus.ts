@@ -10,7 +10,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import type { Bookmark, Compartment, DownloadItem, LedgerSnapshot, PresetConfig, SyncStatus, TabInfo } from '../ipc';
+import type { Bookmark, Compartment, DownloadItem, LedgerSnapshot, PresetConfig, SecurityConfig, SyncStatus, TabInfo } from '../ipc';
 import type { RawObservation } from './internal-types';
 
 export interface InternalEventMap {
@@ -50,6 +50,8 @@ export interface InternalEventMap {
   'permission:requested': { origin: string; permission: string; granted: boolean };
   /** A site's permission set changed (request seen or override set). */
   'permissions:changed': string;
+  /** Security hardening config changed. */
+  'security:changed': SecurityConfig;
 }
 
 export type InternalEvent = keyof InternalEventMap;

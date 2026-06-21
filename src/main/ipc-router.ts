@@ -26,6 +26,7 @@ import { HistoryManager } from './history';
 import { Ledger } from './ledger';
 import { PermissionsManager } from './permissions';
 import { PresetManager } from './presets';
+import { SecurityStore } from './security';
 import { SettingsStore } from './settings';
 import { SyncClient } from './sync';
 import { TabManager } from './tabs';
@@ -45,6 +46,7 @@ export interface RouterModules {
   readonly history: HistoryManager;
   readonly downloads: DownloadsManager;
   readonly permissions: PermissionsManager;
+  readonly security: SecurityStore;
 }
 
 export function registerIpcRouter(m: RouterModules): void {
@@ -180,6 +182,9 @@ export function registerIpcRouter(m: RouterModules): void {
   handle('permissions:all', () => m.permissions.allSites());
   handle('permissions:clearOrigin', (req) => m.permissions.clearOrigin(req.origin));
 
+  handle('security:get', () => m.security.get());
+  handle('security:set', (req) => m.security.patch(req.patch));
+
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {
     const patch = req.patch;
@@ -250,6 +255,7 @@ function forwardBusEvents(m: RouterModules): void {
   m.bus.on('history:changed', () => send('history:changed', null));
   m.bus.on('downloads:changed', (list) => send('downloads:changed', list));
   m.bus.on('permissions:changed', (origin) => send('permissions:changed', origin));
+  m.bus.on('security:changed', (cfg) => send('security:changed', cfg));
 
   // Sanity: every declared event channel is wired above.
   void EVENT_CHANNELS;
