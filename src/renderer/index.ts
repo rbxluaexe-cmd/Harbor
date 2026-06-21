@@ -104,6 +104,7 @@ const ICONS = {
   download: ['M12 3v11', 'M8 10l4 4 4-4', 'M5 20h14'],
   volume: ['M4 9v6h4l5 4V5L8 9z', 'M16 8.5a4 4 0 0 1 0 7'],
   muted: ['M4 9v6h4l5 4V5L8 9z', 'M16 9.5l5 5M21 9.5l-5 5'],
+  reader: ['M5 6h14', 'M5 10h14', 'M5 14h10', 'M5 18h7'],
 };
 
 function fmtBytes(n: number): string {
@@ -297,6 +298,15 @@ function buildToolbar(): void {
   if (active) (compartmentSelect as HTMLSelectElement).value = active.compartmentId;
 
   const isHttp = !!active && /^https?:\/\//i.test(active.url);
+
+  const readerBtn = el('button', {
+    class: 'tool-btn',
+    title: 'Reader view',
+    onclick: () => { if (state.activeTabId !== null) void harbor.invoke('tabs:reader', { tabId: state.activeTabId }); },
+  });
+  readerBtn.append(icon(ICONS.reader));
+  readerBtn.toggleAttribute('disabled', !isHttp);
+
   const isMarked = !!active && state.bookmarks.some((b) => b.url === active.url);
   const star = el('button', {
     class: `tool-btn star${isMarked ? ' on' : ''}`,
@@ -322,7 +332,7 @@ function buildToolbar(): void {
   });
   shield.append(icon(ICONS.shield));
 
-  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, star, dlBtn, shield);
+  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, readerBtn, star, dlBtn, shield);
 
   back.toggleAttribute('disabled', !active?.canGoBack);
   fwd.toggleAttribute('disabled', !active?.canGoForward);

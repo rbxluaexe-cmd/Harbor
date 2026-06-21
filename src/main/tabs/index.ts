@@ -24,6 +24,7 @@ import { CompartmentManager, EPHEMERAL_COMPARTMENT_ID } from '../identity';
 import { FingerprintShield } from '../fingerprint';
 import { Ledger } from '../ledger';
 import { NetworkGuard } from '../network';
+import { READER_EXTRACT_SCRIPT, type ReaderArticle } from '../reader';
 import type { SessionTab } from '../session';
 import type { PresetConfig } from '../../ipc';
 
@@ -59,6 +60,8 @@ export interface TabManagerDeps {
   readonly showBookmarksBar: () => boolean;
   readonly showVerticalTabs: () => boolean;
   readonly bookmarkCount: () => number;
+  /** Store an extracted article and return its harbor://reader URL. */
+  readonly readerUrlFor: (article: ReaderArticle) => string;
   /** Persist the current tab set for session restore. */
   readonly persistSession: (tabs: readonly SessionTab[]) => void;
 }
@@ -143,6 +146,25 @@ export class TabManager {
   }
   isMaximized(): boolean {
     return this.window?.isMaximized() ?? false;
+  }
+
+  /** Extract the active page's article and switch the tab to reader view. */
+  async openReader(tabId: number): Promise<void> {
+    const entry = this.tabs.get(tabId);
+    if (!entry) return;
+    try {
+      const result = (await entry.view.webContents.executeJavaScript(READER_EXTRACT_SCRIPT, true)) as Partial<ReaderArticle>;
+      if (result && typeof result.html === 'string' && result.html.trim().length > 0) {
+        const article: ReaderArticle = {
+          title: result.title ?? '',
+          byline: result.byline ?? '',
+          html: result.html,
+        };
+        void entry.view.webContents.loadURL(this.deps.readerUrlFor(article));
+      }
+    } catch {
+      // Extraction failed (e.g. internal page); leave the tab as-is.
+    }
   }
 
   // --- find in page ---

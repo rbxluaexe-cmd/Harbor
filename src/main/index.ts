@@ -31,6 +31,7 @@ import { NetworkGuard } from './network';
 import { configureSecureDns } from './network/secure-dns';
 import { PermissionsManager } from './permissions';
 import { PresetManager } from './presets';
+import { ReaderManager } from './reader';
 import { registerIpcRouter } from './ipc-router';
 import { SettingsStore } from './settings';
 import { SyncClient, type SyncDataProvider } from './sync';
@@ -148,16 +149,24 @@ function start(): void {
   const update = new UpdateChecker();
   const bookmarks = new BookmarksManager(bus);
   const history = new HistoryManager(bus);
+  const reader = new ReaderManager();
   const session = new SessionManager();
 
-  // Serve the dynamic start page on every compartment session.
+  // Serve the dynamic start page and reader view on every compartment session.
   compartments.registerSessionConfigurator((ses) => {
     ses.protocol.handle('harbor', (request) => {
       try {
-        if (new URL(request.url).hostname === 'newtab') {
+        const url = new URL(request.url);
+        if (url.hostname === 'newtab') {
           return new Response(renderNewTabPage(history.topSites(8)), {
             headers: { 'content-type': 'text/html; charset=utf-8' },
           });
+        }
+        if (url.hostname === 'reader') {
+          const page = reader.render(url.pathname.replace(/^\//, ''));
+          if (page) {
+            return new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+          }
         }
       } catch {
         // fall through to 404
@@ -200,6 +209,7 @@ function start(): void {
     showBookmarksBar: () => settings.get().showBookmarksBar,
     showVerticalTabs: () => settings.get().verticalTabs,
     bookmarkCount: () => bookmarks.list().length,
+    readerUrlFor: (article) => `harbor://reader/${reader.create(article)}`,
     persistSession: (openTabs) => session.save(openTabs),
   });
 
