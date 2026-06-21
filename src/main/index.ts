@@ -13,9 +13,10 @@
 import { appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
 
-import { app, dialog, globalShortcut, Menu } from 'electron';
+import { app, dialog, globalShortcut, Menu, protocol } from 'electron';
+
+import { renderNewTabPage } from './newtab';
 
 import { Bus } from './bus';
 import { BookmarksManager } from './bookmarks';
@@ -90,6 +91,14 @@ app.setName('Harbor');
 // Stable identity for Windows taskbar grouping and notifications.
 app.setAppUserModelId('org.harbor.browser');
 
+// The start page is served over a privileged in-app scheme. Must be declared
+// before the app is ready.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'harbor', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
+const START_PAGE_URL = 'harbor://newtab/';
+
 // Single-instance: a second launch focuses the existing window instead of
 // spawning a parallel session that could fragment compartments.
 if (!app.requestSingleInstanceLock()) {
@@ -141,6 +150,22 @@ function start(): void {
   const history = new HistoryManager(bus);
   const session = new SessionManager();
 
+  // Serve the dynamic start page on every compartment session.
+  compartments.registerSessionConfigurator((ses) => {
+    ses.protocol.handle('harbor', (request) => {
+      try {
+        if (new URL(request.url).hostname === 'newtab') {
+          return new Response(renderNewTabPage(history.topSites(8)), {
+            headers: { 'content-type': 'text/html; charset=utf-8' },
+          });
+        }
+      } catch {
+        // fall through to 404
+      }
+      return new Response('Not found', { status: 404 });
+    });
+  });
+
   const syncProvider: SyncDataProvider = {
     collect: () => ({
       settings: settings.get(),
@@ -162,8 +187,6 @@ function start(): void {
   };
   const sync = new SyncClient(bus, syncProvider);
 
-  const startPageUrl = pathToFileURL(join(__dirname, '..', 'renderer', 'newtab.html')).href;
-
   tabs = new TabManager({
     bus,
     compartments,
@@ -172,7 +195,7 @@ function start(): void {
     ledger,
     config: () => presets.current(),
     homepage: () => settings.get().homepage,
-    startPageUrl,
+    startPageUrl: START_PAGE_URL,
     showLedgerPanel: () => settings.get().showLedgerPanel,
     showBookmarksBar: () => settings.get().showBookmarksBar,
     bookmarkCount: () => bookmarks.list().length,

@@ -59,6 +59,23 @@ export class HistoryManager {
     return filtered.slice(0, limit);
   }
 
+  /** Most-visited sites, aggregated by origin, for the start page. */
+  topSites(limit = 8): ReadonlyArray<{ title: string; url: string }> {
+    const byOrigin = new Map<string, { title: string; url: string; count: number }>();
+    for (const e of this.store.get().entries) {
+      let origin: string;
+      try {
+        origin = new URL(e.url).origin;
+      } catch {
+        continue;
+      }
+      const cur = byOrigin.get(origin);
+      if (cur) cur.count += 1;
+      else byOrigin.set(origin, { title: e.title, url: e.url, count: 1 });
+    }
+    return [...byOrigin.values()].sort((a, b) => b.count - a.count).slice(0, limit).map(({ title, url }) => ({ title, url }));
+  }
+
   remove(id: string): void {
     this.store.update((s) => ({ entries: s.entries.filter((e) => e.id !== id) }));
     this.bus.emit('history:changed', undefined);
