@@ -9,6 +9,7 @@ import { JsonStore } from './store';
 const settingsSchema = z.object({
   homepage: z.string(),
   showLedgerPanel: z.boolean(),
+  showBookmarksBar: z.boolean(),
 });
 
 export type StoredSettings = z.infer<typeof settingsSchema>;
@@ -21,6 +22,7 @@ export class SettingsStore {
       // Empty homepage means new tabs open Harbor's local start page.
       homepage: '',
       showLedgerPanel: true,
+      showBookmarksBar: true,
     }));
   }
 

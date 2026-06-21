@@ -9,8 +9,10 @@
  */
 import type {
   BootstrapState,
+  Bookmark,
   Compartment,
   DuressConfig,
+  HistoryEntry,
   LedgerSnapshot,
   PresetSummary,
   Settings,
@@ -20,13 +22,14 @@ import type {
 
 const harbor = window.harbor;
 
-type PanelMode = 'ledger' | 'settings' | 'compartments';
+type PanelMode = 'ledger' | 'history' | 'settings' | 'compartments';
 
 interface UiState {
   version: string;
   settings: Settings;
   compartments: readonly Compartment[];
   tabs: readonly TabInfo[];
+  bookmarks: readonly Bookmark[];
   presets: readonly PresetSummary[];
   sync: SyncStatus;
   duress: DuressConfig;
@@ -37,9 +40,10 @@ interface UiState {
 
 const state: UiState = {
   version: '',
-  settings: { activePreset: '', homepage: '', showLedgerPanel: true },
+  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true },
   compartments: [],
   tabs: [],
+  bookmarks: [],
   presets: [],
   sync: { enabled: false, lastSyncedAt: null, pendingChanges: 0, serverConfigured: false },
   duress: { accelerator: '', wipeCompartments: [], decoyCompartmentId: null, enabled: false },
@@ -90,6 +94,8 @@ const ICONS = {
   shield: 'M12 3l7 3v5c0 4.6-3 7.7-7 9-4-1.3-7-4.4-7-9V6l7-3z',
   lock: ['M5 11h14v9H5z', 'M8 11V8a4 4 0 0 1 8 0v3'],
   search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M20 20l-3.5-3.5'],
+  star: 'M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 17l-5.25 2.65 1-5.85L3.5 9.7l5.9-.9z',
+  trash: ['M4 7h16', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13'],
 };
 
 function $(id: string): HTMLElement {
@@ -191,6 +197,16 @@ function buildToolbar(): void {
   }
   if (active) (compartmentSelect as HTMLSelectElement).value = active.compartmentId;
 
+  const isHttp = !!active && /^https?:\/\//i.test(active.url);
+  const isMarked = !!active && state.bookmarks.some((b) => b.url === active.url);
+  const star = el('button', {
+    class: `tool-btn star${isMarked ? ' on' : ''}`,
+    title: isMarked ? 'Remove bookmark' : 'Bookmark this page',
+    onclick: () => void toggleBookmark(),
+  });
+  star.append(icon(ICONS.star));
+  star.toggleAttribute('disabled', !isHttp);
+
   const shield = el('button', {
     class: `tool-btn${state.settings.showLedgerPanel ? ' on' : ''}`,
     title: 'Privacy panel',
@@ -198,7 +214,7 @@ function buildToolbar(): void {
   });
   shield.append(icon(ICONS.shield));
 
-  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, shield);
+  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, star, shield);
 
   back.toggleAttribute('disabled', !active?.canGoBack);
   fwd.toggleAttribute('disabled', !active?.canGoForward);
@@ -258,6 +274,24 @@ function doFind(forward: boolean): void {
   void harbor.invoke('find:start', { text, forward });
 }
 
+// --- bookmarks bar -----------------------------------------------------------
+
+function renderBookmarksBar(): void {
+  const bar = $('bookmarksbar');
+  const show = state.settings.showBookmarksBar && state.bookmarks.length > 0;
+  bar.toggleAttribute('hidden', !show);
+  if (!show) return;
+  bar.replaceChildren();
+  for (const b of state.bookmarks) {
+    const fav = el('span', { class: 'fav', text: (b.title || b.url).slice(0, 1).toUpperCase() });
+    const x = el('span', { class: 'x', title: 'Remove', onclick: (e: Event) => { e.stopPropagation(); void removeBookmark(b.id); } });
+    x.append(icon('M5 5l8 8M13 5l-8 8', '0 0 18 18'));
+    const chip = el('div', { class: 'bm-chip', title: b.url }, [fav, el('span', { class: 'label', text: b.title || b.url }), x]);
+    chip.addEventListener('click', () => { void navigateActive(b.url); });
+    bar.append(chip);
+  }
+}
+
 // --- panel -------------------------------------------------------------------
 
 function renderPanel(): void {
@@ -267,12 +301,14 @@ function renderPanel(): void {
   panel.replaceChildren();
   const tabs = el('div', { class: 'panel-tabs' }, [
     panelTabButton('Ledger', 'ledger'),
+    panelTabButton('History', 'history'),
     panelTabButton('Settings', 'settings'),
-    panelTabButton('Compartments', 'compartments'),
+    panelTabButton('Boxes', 'compartments'),
   ]);
   const body = el('div', { class: 'panel-body' });
   panel.append(tabs, body);
   if (state.panelMode === 'ledger') renderLedger(body);
+  else if (state.panelMode === 'history') void renderHistory(body);
   else if (state.panelMode === 'settings') renderSettings(body);
   else renderCompartments(body);
 }
@@ -311,6 +347,59 @@ function renderLedger(body: HTMLElement): void {
 
 function stat(n: number, label: string): HTMLElement {
   return el('div', { class: 'stat' }, [el('div', { class: 'n', text: String(n) }), el('div', { class: 'l', text: label })]);
+}
+
+let reloadHistory: (() => void) | null = null;
+
+async function renderHistory(body: HTMLElement): Promise<void> {
+  const search = el('input', {
+    type: 'text',
+    placeholder: 'Search history',
+    style: 'flex:1;padding:9px 11px;border-radius:9px;border:1px solid var(--border);background:var(--surface);color:var(--fg);outline:none;user-select:text',
+  }) as HTMLInputElement;
+  const clear = el('button', { class: 'btn', text: 'Clear all', onclick: () => void clearHistory() });
+  const listEl = el('div', {});
+  body.replaceChildren(el('div', { class: 'row', style: 'margin-bottom:12px' }, [search, clear]), listEl);
+
+  const load = (): void => {
+    void invoke(harbor.invoke('history:list', { query: search.value, limit: 300 })).then((items) => {
+      renderHistoryList(listEl, items ?? []);
+    });
+  };
+  search.addEventListener('input', load);
+  reloadHistory = load;
+  load();
+}
+
+function renderHistoryList(listEl: HTMLElement, items: readonly HistoryEntry[]): void {
+  listEl.replaceChildren();
+  if (items.length === 0) {
+    listEl.append(el('p', { class: 'muted', text: 'No history yet.' }));
+    return;
+  }
+  for (const h of items) {
+    const x = el('span', { class: 'x', title: 'Remove', onclick: (e: Event) => { e.stopPropagation(); void removeHistory(h.id); } });
+    x.append(icon(ICONS.trash));
+    const row = el('div', { class: 'hist-row' }, [
+      el('div', { class: 'body' }, [el('div', { class: 't', text: h.title || h.url }), el('div', { class: 'u', text: h.url })]),
+      el('span', { class: 'when', text: relTime(h.visitedAt) }),
+      x,
+    ]);
+    row.addEventListener('click', () => { void navigateActive(h.url); });
+    listEl.append(row);
+  }
+}
+
+function relTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const hrs = Math.floor(m / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(ts).toLocaleDateString();
 }
 
 function renderSettings(body: HTMLElement): void {
@@ -480,6 +569,30 @@ async function createCompartment(name: string, persistent: boolean): Promise<voi
 }
 async function removeCompartment(id: string): Promise<void> { await invoke(harbor.invoke('compartments:remove', { id })); await refreshCompartments(); }
 
+async function toggleBookmark(): Promise<void> {
+  const active = activeTab();
+  if (!active || !/^https?:\/\//i.test(active.url)) return;
+  const list = await invoke(harbor.invoke('bookmarks:add', { url: active.url, title: active.title }));
+  if (list) state.bookmarks = list;
+  renderAll();
+}
+async function removeBookmark(id: string): Promise<void> {
+  const list = await invoke(harbor.invoke('bookmarks:remove', { id }));
+  if (list) state.bookmarks = list;
+  renderAll();
+}
+async function navigateActive(url: string): Promise<void> {
+  if (state.activeTabId === null) { await newTab(); }
+  if (state.activeTabId === null) return;
+  await invoke(harbor.invoke('tabs:navigate', { tabId: state.activeTabId, url }));
+}
+async function removeHistory(id: string): Promise<void> { await invoke(harbor.invoke('history:remove', { id })); reloadHistory?.(); }
+async function clearHistory(): Promise<void> {
+  if (!window.confirm('Clear all browsing history?')) return;
+  await invoke(harbor.invoke('history:clear'));
+  reloadHistory?.();
+}
+
 // --- refresh / data ----------------------------------------------------------
 
 async function refreshTabs(): Promise<void> { const tabs = await invoke(harbor.invoke('tabs:list')); if (tabs) state.tabs = tabs; ensureActiveTab(); renderAll(); }
@@ -499,7 +612,7 @@ function ensureActiveTab(): void {
   state.activeTabId = last ? last.id : null;
 }
 
-function renderAll(): void { renderTabs(); buildToolbar(); renderPanel(); }
+function renderAll(): void { renderTabs(); buildToolbar(); renderBookmarksBar(); renderPanel(); }
 
 // --- events ------------------------------------------------------------------
 
@@ -521,6 +634,8 @@ function subscribe(): void {
   harbor.on('ui:focus-address', () => { urlInput.focus(); urlInput.select(); });
   harbor.on('ui:find', () => openFind());
   harbor.on('find:result', ({ matches, active }) => { findCount.textContent = matches > 0 ? `${active}/${matches}` : 'No results'; });
+  harbor.on('bookmarks:changed', (list) => { state.bookmarks = list; renderTabs(); buildToolbar(); renderBookmarksBar(); });
+  harbor.on('history:changed', () => { if (state.panelMode === 'history') reloadHistory?.(); });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
@@ -539,6 +654,7 @@ async function init(): Promise<void> {
     state.settings = boot.settings;
     state.compartments = boot.compartments;
     state.tabs = boot.tabs;
+    state.bookmarks = boot.bookmarks;
     state.presets = boot.presets;
     state.sync = boot.sync;
     state.duress = boot.duress.config;

@@ -19,8 +19,10 @@ import { Ledger } from '../ledger';
 import { NetworkGuard } from '../network';
 import type { PresetConfig } from '../../ipc';
 
-// Must match the chrome CSS: title bar (40) + toolbar (48).
-const TOPBAR_HEIGHT = 88;
+// Must match the chrome CSS: title bar (40) + toolbar (48), plus the optional
+// bookmarks bar (34) when it is shown.
+const BASE_TOP = 88;
+const BOOKMARKS_BAR = 34;
 const LEDGER_PANEL_WIDTH = 360;
 
 interface TabEntry {
@@ -43,6 +45,8 @@ export interface TabManagerDeps {
   /** file:// URL of the bundled start page shown for new/blank tabs. */
   readonly startPageUrl: string;
   readonly showLedgerPanel: () => boolean;
+  readonly showBookmarksBar: () => boolean;
+  readonly bookmarkCount: () => number;
 }
 
 export class TabManager {
@@ -56,6 +60,14 @@ export class TabManager {
         this.activateDecoy(payload.decoyCompartmentId);
       }
     });
+    // The bookmarks bar changes the chrome height; re-lay out when it changes.
+    this.deps.bus.on('bookmarks:changed', () => this.layout());
+  }
+
+  /** Height of the chrome's top region, including the bookmarks bar if shown. */
+  private topHeight(): number {
+    const showBar = this.deps.showBookmarksBar() && this.deps.bookmarkCount() > 0;
+    return BASE_TOP + (showBar ? BOOKMARKS_BAR : 0);
   }
 
   /** Create the main window and load the chrome UI into its web contents. */
@@ -222,6 +234,9 @@ export class TabManager {
     };
     wc.on('page-title-updated', (_e, title) => {
       entry.title = title;
+      if (isRecordable(entry.url)) {
+        this.deps.bus.emit('history:visit', { url: entry.url, title });
+      }
       update();
     });
     wc.on('did-start-loading', () => {
@@ -242,6 +257,9 @@ export class TabManager {
       // A new top-level document — the ledger for this tab starts fresh.
       entry.url = navUrl;
       this.deps.ledger.reset(wc.id);
+      if (isRecordable(navUrl)) {
+        this.deps.bus.emit('history:visit', { url: navUrl, title: entry.title });
+      }
       update();
     });
     wc.on('did-navigate-in-page', (_e, navUrl, isMainFrame) => {
@@ -395,11 +413,12 @@ export class TabManager {
     const w = width ?? 0;
     const h = height ?? 0;
     const panelWidth = this.deps.showLedgerPanel() ? LEDGER_PANEL_WIDTH : 0;
+    const top = this.topHeight();
     const contentBounds = {
       x: 0,
-      y: TOPBAR_HEIGHT,
+      y: top,
       width: Math.max(0, w - panelWidth),
-      height: Math.max(0, h - TOPBAR_HEIGHT),
+      height: Math.max(0, h - top),
     };
     if (this.activeTabId !== null) {
       const active = this.tabs.get(this.activeTabId);
@@ -433,6 +452,11 @@ export class TabManager {
   private emitListChanged(): void {
     this.deps.bus.emit('tab:list-changed', this.list());
   }
+}
+
+/** Only real web pages go into history — not the local start page or about:. */
+function isRecordable(url: string): boolean {
+  return /^https?:\/\//i.test(url);
 }
 
 /** Add a scheme when the user typed a bare host; otherwise pass through. */

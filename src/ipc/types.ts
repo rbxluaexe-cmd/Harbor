@@ -161,11 +161,28 @@ export interface UpdateStatus {
   readonly message: string;
 }
 
+/** A saved bookmark. */
+export interface Bookmark {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+  readonly addedAt: number;
+}
+
+/** A visited page in browsing history. */
+export interface HistoryEntry {
+  readonly id: string;
+  readonly title: string;
+  readonly url: string;
+  readonly visitedAt: number;
+}
+
 /** User-facing settings independent of the active preset. */
 export interface Settings {
   readonly activePreset: string;
   readonly homepage: string;
   readonly showLedgerPanel: boolean;
+  readonly showBookmarksBar: boolean;
 }
 
 /** Top-level state pushed to the renderer on startup so it can render once. */
@@ -174,6 +191,7 @@ export interface BootstrapState {
   readonly settings: Settings;
   readonly compartments: readonly Compartment[];
   readonly tabs: readonly TabInfo[];
+  readonly bookmarks: readonly Bookmark[];
   readonly activePreset: string;
   readonly presets: readonly PresetSummary[];
   readonly sync: SyncStatus;

@@ -8,9 +8,11 @@
  */
 import type {
   BootstrapState,
+  Bookmark,
   Compartment,
   DuressConfig,
   DuressStatus,
+  HistoryEntry,
   LedgerSnapshot,
   Preset,
   PresetSummary,
@@ -169,6 +171,32 @@ export interface InvokeMap {
     request: void;
     response: void;
   };
+
+  'bookmarks:list': {
+    request: void;
+    response: readonly Bookmark[];
+  };
+  'bookmarks:add': {
+    request: { url: string; title: string };
+    response: readonly Bookmark[];
+  };
+  'bookmarks:remove': {
+    request: { id: string };
+    response: readonly Bookmark[];
+  };
+
+  'history:list': {
+    request: { query?: string; limit?: number };
+    response: readonly HistoryEntry[];
+  };
+  'history:remove': {
+    request: { id: string };
+    response: void;
+  };
+  'history:clear': {
+    request: void;
+    response: void;
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -188,6 +216,10 @@ export interface EventMap {
   'ui:find': null;
   /** Find-in-page result counts. */
   'find:result': { matches: number; active: number };
+  /** The bookmark set changed. */
+  'bookmarks:changed': readonly Bookmark[];
+  /** History changed; the renderer reloads the history view if it is open. */
+  'history:changed': null;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -233,6 +265,12 @@ export const INVOKE_CHANNELS = [
   'window:isMaximized',
   'find:start',
   'find:stop',
+  'bookmarks:list',
+  'bookmarks:add',
+  'bookmarks:remove',
+  'history:list',
+  'history:remove',
+  'history:clear',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -247,4 +285,6 @@ export const EVENT_CHANNELS = [
   'window:maximized',
   'ui:find',
   'find:result',
+  'bookmarks:changed',
+  'history:changed',
 ] as const satisfies readonly EventChannel[];

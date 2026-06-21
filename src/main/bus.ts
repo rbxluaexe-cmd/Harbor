@@ -10,7 +10,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import type { Compartment, LedgerSnapshot, PresetConfig, SyncStatus, TabInfo } from '../ipc';
+import type { Bookmark, Compartment, LedgerSnapshot, PresetConfig, SyncStatus, TabInfo } from '../ipc';
 import type { RawObservation } from './internal-types';
 
 export interface InternalEventMap {
@@ -36,6 +36,12 @@ export interface InternalEventMap {
   'ledger:updated': LedgerSnapshot;
   /** Sync subsystem state changed. */
   'sync:changed': SyncStatus;
+  /** The bookmark set changed. */
+  'bookmarks:changed': readonly Bookmark[];
+  /** A page was visited (recorded into history). */
+  'history:visit': { url: string; title: string };
+  /** History changed (a visit was recorded, removed, or cleared). */
+  'history:changed': void;
 }
 
 export type InternalEvent = keyof InternalEventMap;

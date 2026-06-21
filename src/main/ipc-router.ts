@@ -18,8 +18,10 @@ import { EVENT_CHANNELS, type EventMap, type InvokeChannel } from '../ipc';
 import { app } from 'electron';
 
 import { Bus } from './bus';
+import { BookmarksManager } from './bookmarks';
 import { CompartmentManager } from './identity';
 import { DuressController } from './duress';
+import { HistoryManager } from './history';
 import { Ledger } from './ledger';
 import { PresetManager } from './presets';
 import { SettingsStore } from './settings';
@@ -37,6 +39,8 @@ export interface RouterModules {
   readonly duress: DuressController;
   readonly update: UpdateChecker;
   readonly settings: SettingsStore;
+  readonly bookmarks: BookmarksManager;
+  readonly history: HistoryManager;
 }
 
 export function registerIpcRouter(m: RouterModules): void {
@@ -51,6 +55,7 @@ export function registerIpcRouter(m: RouterModules): void {
     activePreset: m.presets.activeName(),
     homepage: m.settings.get().homepage,
     showLedgerPanel: m.settings.get().showLedgerPanel,
+    showBookmarksBar: m.settings.get().showBookmarksBar,
   });
 
   const bootstrap = (): BootstrapState => ({
@@ -58,6 +63,7 @@ export function registerIpcRouter(m: RouterModules): void {
     settings: composedSettings(),
     compartments: m.compartments.list(),
     tabs: m.tabs.list(),
+    bookmarks: m.bookmarks.list(),
     activePreset: m.presets.activeName(),
     presets: m.presets.list(),
     sync: m.sync.status(),
@@ -124,23 +130,38 @@ export function registerIpcRouter(m: RouterModules): void {
     m.tabs.stopFindActive();
   });
 
+  handle('bookmarks:list', () => m.bookmarks.list());
+  handle('bookmarks:add', (req) => m.bookmarks.toggle(req.url, req.title));
+  handle('bookmarks:remove', (req) => m.bookmarks.remove(req.id));
+
+  handle('history:list', (req) => m.history.list(req.query, req.limit));
+  handle('history:remove', (req) => {
+    m.history.remove(req.id);
+  });
+  handle('history:clear', () => {
+    m.history.clear();
+  });
+
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {
     const patch = req.patch;
     if (patch.activePreset !== undefined) {
       m.presets.apply(patch.activePreset);
     }
-    const storePatch: Partial<{ homepage: string; showLedgerPanel: boolean }> = {};
+    const storePatch: Partial<{ homepage: string; showLedgerPanel: boolean; showBookmarksBar: boolean }> = {};
     if (patch.homepage !== undefined) {
       storePatch.homepage = patch.homepage;
     }
     if (patch.showLedgerPanel !== undefined) {
       storePatch.showLedgerPanel = patch.showLedgerPanel;
     }
+    if (patch.showBookmarksBar !== undefined) {
+      storePatch.showBookmarksBar = patch.showBookmarksBar;
+    }
     if (Object.keys(storePatch).length > 0) {
       m.settings.patch(storePatch);
     }
-    if (patch.showLedgerPanel !== undefined) {
+    if (patch.showLedgerPanel !== undefined || patch.showBookmarksBar !== undefined) {
       m.tabs.relayout();
     }
     return composedSettings();
@@ -170,6 +191,8 @@ function forwardBusEvents(m: RouterModules): void {
   );
   m.bus.on('preset:changed', () => send('preset:changed', m.presets.list()));
   m.bus.on('sync:changed', (status) => send('sync:changed', status));
+  m.bus.on('bookmarks:changed', (list) => send('bookmarks:changed', list));
+  m.bus.on('history:changed', () => send('history:changed', null));
 
   // Sanity: every declared event channel is wired above.
   void EVENT_CHANNELS;

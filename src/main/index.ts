@@ -18,8 +18,10 @@ import { pathToFileURL } from 'node:url';
 import { app, dialog, globalShortcut, Menu } from 'electron';
 
 import { Bus } from './bus';
+import { BookmarksManager } from './bookmarks';
 import { CompartmentManager } from './identity';
 import { DuressController } from './duress';
+import { HistoryManager } from './history';
 import { FingerprintShield } from './fingerprint';
 import { Ledger } from './ledger';
 import { NetworkGuard } from './network';
@@ -128,6 +130,8 @@ function start(): void {
   const ledger = new Ledger(bus);
   const duress = new DuressController(bus, (ids) => compartments.wipe(ids));
   const update = new UpdateChecker();
+  const bookmarks = new BookmarksManager(bus);
+  const history = new HistoryManager(bus);
 
   const syncProvider: SyncDataProvider = {
     collect: () => ({
@@ -162,9 +166,11 @@ function start(): void {
     homepage: () => settings.get().homepage,
     startPageUrl,
     showLedgerPanel: () => settings.get().showLedgerPanel,
+    showBookmarksBar: () => settings.get().showBookmarksBar,
+    bookmarkCount: () => bookmarks.list().length,
   });
 
-  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings });
+  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history });
 
   const preloadPath = join(__dirname, '..', 'preload', 'index.js');
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');
