@@ -165,11 +165,12 @@ async function invoke<T>(p: Promise<T>): Promise<T | null> {
 
 // --- title bar: tabs + window controls --------------------------------------
 
+let dragTabId: number | null = null;
+
 function renderTabs(): void {
   const strip = $('tabs');
   strip.replaceChildren();
-  const ordered = [...state.tabs].sort((a, b) => Number(b.pinned) - Number(a.pinned));
-  for (const tab of ordered) {
+  state.tabs.forEach((tab, index) => {
     const compartment = compartmentFor(tab.compartmentId);
     const lead = tab.loadState === 'loading'
       ? el('span', { class: 'spinner' })
@@ -193,12 +194,42 @@ function renderTabs(): void {
     const chip = el('div', {
       class: `tab${tab.id === state.activeTabId ? ' active' : ''}${tab.pinned ? ' pinned' : ''}`,
       title: tab.url || tab.title,
+      draggable: true,
     }, children);
     chip.addEventListener('click', () => { void selectTab(tab.id); });
     chip.addEventListener('contextmenu', (e: Event) => { e.preventDefault(); void harbor.invoke('tabs:contextMenu', { tabId: tab.id }); });
     chip.addEventListener('auxclick', (e: Event) => { if ((e as MouseEvent).button === 1) { e.preventDefault(); void closeTab(tab.id); } });
+    chip.addEventListener('dragstart', (e: Event) => {
+      dragTabId = tab.id;
+      (e as DragEvent).dataTransfer!.effectAllowed = 'move';
+      chip.classList.add('dragging');
+    });
+    chip.addEventListener('dragend', () => { dragTabId = null; chip.classList.remove('dragging'); clearDropMarks(); });
+    chip.addEventListener('dragover', (e: Event) => {
+      e.preventDefault();
+      const de = e as DragEvent;
+      const rect = chip.getBoundingClientRect();
+      const after = de.clientX - rect.left > rect.width / 2;
+      clearDropMarks();
+      chip.classList.add(after ? 'drop-after' : 'drop-before');
+      chip.dataset['drop'] = String(after ? index + 1 : index);
+    });
+    chip.addEventListener('drop', (e: Event) => {
+      e.preventDefault();
+      const to = Number(chip.dataset['drop'] ?? index);
+      clearDropMarks();
+      if (dragTabId !== null) void reorderTab(dragTabId, to);
+    });
     strip.append(chip);
-  }
+  });
+}
+
+function clearDropMarks(): void {
+  for (const c of document.querySelectorAll('#tabs .tab')) c.classList.remove('drop-before', 'drop-after');
+}
+async function reorderTab(tabId: number, toIndex: number): Promise<void> {
+  await invoke(harbor.invoke('tabs:reorder', { tabId, toIndex }));
+  await refreshTabs();
 }
 
 let maxButton: HTMLElement;

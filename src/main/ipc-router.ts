@@ -105,6 +105,9 @@ export function registerIpcRouter(m: RouterModules): void {
   handle('tabs:contextMenu', (req) => {
     m.tabs.showTabMenu(req.tabId);
   });
+  handle('tabs:reorder', (req) => {
+    m.tabs.reorder(req.tabId, req.toIndex);
+  });
 
   handle('ledger:get', (req) => m.ledger.snapshot(req.tabId));
 

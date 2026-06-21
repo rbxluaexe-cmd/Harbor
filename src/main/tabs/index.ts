@@ -63,7 +63,7 @@ export interface TabManagerDeps {
 
 export class TabManager {
   private window: BrowserWindow | null = null;
-  private readonly tabs = new Map<number, TabEntry>();
+  private tabs = new Map<number, TabEntry>();
   private activeTabId: number | null = null;
   /** Recently closed tabs, for reopen-closed-tab (Ctrl+Shift+T). */
   private readonly closedStack: SessionTab[] = [];
@@ -417,8 +417,32 @@ export class TabManager {
   togglePin(tabId: number): void {
     const entry = this.requireTab(tabId);
     entry.pinned = !entry.pinned;
+    this.normalizePinnedOrder();
     this.deps.bus.emit('tab:updated', this.buildInfo(entry));
-    this.deps.persistSession(this.serializeSession());
+    this.emitListChanged();
+  }
+
+  /** Move a tab to a new position (drag-to-reorder). Pinned tabs stay first. */
+  reorder(tabId: number, toIndex: number): void {
+    if (!this.tabs.has(tabId)) return;
+    const entries = [...this.tabs.entries()];
+    const fromIdx = entries.findIndex(([id]) => id === tabId);
+    if (fromIdx === -1) return;
+    const moved = entries.splice(fromIdx, 1)[0];
+    if (!moved) return;
+    let target = toIndex > fromIdx ? toIndex - 1 : toIndex;
+    target = Math.max(0, Math.min(entries.length, target));
+    entries.splice(target, 0, moved);
+    this.tabs = new Map(entries);
+    this.normalizePinnedOrder();
+    this.emitListChanged();
+  }
+
+  /** Keep pinned tabs ahead of unpinned ones, preserving relative order. */
+  private normalizePinnedOrder(): void {
+    const entries = [...this.tabs.entries()];
+    entries.sort((a, b) => Number(b[1].pinned) - Number(a[1].pinned));
+    this.tabs = new Map(entries);
   }
 
   duplicate(tabId: number): void {
@@ -491,8 +515,13 @@ export class TabManager {
     }
     for (const t of valid) {
       const info = this.create(t.compartmentId, t.url || undefined);
-      if (t.pinned) this.togglePin(info.id);
+      if (t.pinned) {
+        const entry = this.tabs.get(info.id);
+        if (entry) entry.pinned = true;
+      }
     }
+    this.normalizePinnedOrder();
+    this.emitListChanged();
   }
 
   private serializeSession(): readonly SessionTab[] {

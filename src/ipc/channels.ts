@@ -90,6 +90,10 @@ export interface InvokeMap {
     request: { tabId: number };
     response: void;
   };
+  'tabs:reorder': {
+    request: { tabId: number; toIndex: number };
+    response: void;
+  };
 
   'ledger:get': {
     request: { tabId: number };
@@ -294,6 +298,7 @@ export const INVOKE_CHANNELS = [
   'tabs:reassign',
   'tabs:toggleMute',
   'tabs:contextMenu',
+  'tabs:reorder',
   'ledger:get',
   'presets:list',
   'presets:get',

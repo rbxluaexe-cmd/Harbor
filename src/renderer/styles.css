@@ -123,6 +123,9 @@ svg {
   padding: 0;
   justify-content: center;
 }
+.tab.dragging { opacity: 0.4; }
+.tab.drop-before { box-shadow: inset 2px 0 0 var(--accent); }
+.tab.drop-after { box-shadow: inset -2px 0 0 var(--accent); }
 .tab .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .tab .spinner {
   width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto;
