@@ -167,6 +167,34 @@ export class TabManager {
     }
   }
 
+  // --- developer panel ---
+  openDevTools(tabId: number): void {
+    const wc = this.requireTab(tabId).view.webContents;
+    if (wc.isDevToolsOpened()) wc.closeDevTools();
+    else wc.openDevTools({ mode: 'detach' });
+  }
+
+  async cookiesFor(tabId: number): Promise<ReadonlyArray<{ name: string; domain: string; secure: boolean; httpOnly: boolean }>> {
+    const entry = this.tabs.get(tabId);
+    if (!entry || !entry.url) return [];
+    try {
+      const cookies = await entry.view.webContents.session.cookies.get({ url: entry.url });
+      return cookies.map((c) => ({ name: c.name, domain: c.domain ?? '', secure: Boolean(c.secure), httpOnly: Boolean(c.httpOnly) }));
+    } catch {
+      return [];
+    }
+  }
+
+  async pageHtml(tabId: number): Promise<string> {
+    const entry = this.tabs.get(tabId);
+    if (!entry) return '';
+    try {
+      return (await entry.view.webContents.executeJavaScript('document.documentElement.outerHTML')) as string;
+    } catch {
+      return '';
+    }
+  }
+
   // --- find in page ---
   findInActive(text: string, forward: boolean): void {
     if (this.activeTabId === null || text.length === 0) return;

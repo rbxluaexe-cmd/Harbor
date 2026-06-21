@@ -512,6 +512,12 @@ select#compartment {
 .preset .name { font-weight: 600; }
 .preset .desc { color: var(--fg-dim); font-size: 11px; margin-top: 3px; }
 
+.dev-row { display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--border); }
+.dev-k { color: var(--fg-dim); width: 92px; flex: 0 0 auto; font-size: 12px; }
+.dev-v { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; user-select: text; font-size: 12px; }
+.dev-cookie { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
+.dev-cookie .k { user-select: text; }
+
 .muted { color: var(--fg-dim); }
 .row { display: flex; gap: 8px; align-items: center; }
 .row.wrap { flex-wrap: wrap; }

@@ -112,6 +112,11 @@ export function registerIpcRouter(m: RouterModules): void {
     m.tabs.reorder(req.tabId, req.toIndex);
   });
   handle('tabs:reader', (req) => m.tabs.openReader(req.tabId));
+  handle('tabs:devtools', (req) => {
+    m.tabs.openDevTools(req.tabId);
+  });
+  handle('dev:cookies', (req) => m.tabs.cookiesFor(req.tabId));
+  handle('dev:html', (req) => m.tabs.pageHtml(req.tabId));
 
   handle('ledger:get', (req) => m.ledger.snapshot(req.tabId));
 

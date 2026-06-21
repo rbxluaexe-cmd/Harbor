@@ -188,6 +188,14 @@ export interface UpdateStatus {
   readonly message: string;
 }
 
+/** A cookie shown in the developer panel. */
+export interface CookieInfo {
+  readonly name: string;
+  readonly domain: string;
+  readonly secure: boolean;
+  readonly httpOnly: boolean;
+}
+
 /** Result of downloading + hash-verifying an update installer. */
 export interface UpdateDownloadResult {
   readonly ok: boolean;

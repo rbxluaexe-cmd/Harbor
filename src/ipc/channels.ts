@@ -10,6 +10,7 @@ import type {
   BootstrapState,
   Bookmark,
   Compartment,
+  CookieInfo,
   DownloadItem,
   DuressConfig,
   DuressStatus,
@@ -100,6 +101,18 @@ export interface InvokeMap {
   'tabs:reader': {
     request: { tabId: number };
     response: void;
+  };
+  'tabs:devtools': {
+    request: { tabId: number };
+    response: void;
+  };
+  'dev:cookies': {
+    request: { tabId: number };
+    response: readonly CookieInfo[];
+  };
+  'dev:html': {
+    request: { tabId: number };
+    response: string;
   };
 
   'ledger:get': {
@@ -330,6 +343,9 @@ export const INVOKE_CHANNELS = [
   'tabs:contextMenu',
   'tabs:reorder',
   'tabs:reader',
+  'tabs:devtools',
+  'dev:cookies',
+  'dev:html',
   'ledger:get',
   'presets:list',
   'presets:get',

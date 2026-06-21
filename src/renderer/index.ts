@@ -26,7 +26,7 @@ import type {
 
 const harbor = window.harbor;
 
-type PanelMode = 'ledger' | 'history' | 'settings' | 'compartments';
+type PanelMode = 'ledger' | 'history' | 'dev' | 'settings' | 'compartments';
 
 interface UiState {
   version: string;
@@ -477,6 +477,7 @@ function renderPanel(): void {
   const tabs = el('div', { class: 'panel-tabs' }, [
     panelTabButton('Ledger', 'ledger'),
     panelTabButton('History', 'history'),
+    panelTabButton('Dev', 'dev'),
     panelTabButton('Settings', 'settings'),
     panelTabButton('Boxes', 'compartments'),
   ]);
@@ -484,6 +485,7 @@ function renderPanel(): void {
   panel.append(tabs, body);
   if (state.panelMode === 'ledger') renderLedger(body);
   else if (state.panelMode === 'history') void renderHistory(body);
+  else if (state.panelMode === 'dev') renderDev(body);
   else if (state.panelMode === 'settings') renderSettings(body);
   else renderCompartments(body);
 }
@@ -667,6 +669,71 @@ function relTime(ts: number): string {
   const days = Math.floor(hrs / 24);
   if (days < 7) return `${days}d ago`;
   return new Date(ts).toLocaleDateString();
+}
+
+function renderDev(body: HTMLElement): void {
+  const active = activeTab();
+  if (!active) { body.append(el('p', { class: 'muted', text: 'No active tab.' })); return; }
+  const compartment = compartmentFor(active.compartmentId);
+  const secure = /^https:\/\//i.test(active.url);
+  const snap = activeSnapshot();
+
+  const copy = (text: string): void => {
+    void navigator.clipboard.writeText(text).then(() => undefined, () => window.alert('Copy failed'));
+  };
+
+  body.append(
+    el('div', { class: 'section' }, [
+      el('h3', { text: 'Page' }),
+      devRow('URL', active.url || '—'),
+      devRow('Title', active.title || '—'),
+      devRow('Compartment', compartment?.name ?? active.compartmentId),
+      devRow('Transport', secure ? 'HTTPS (secure)' : 'Not secure'),
+      devRow('Requests seen', String(snap?.score.totalRequests ?? 0)),
+    ]),
+    el('div', { class: 'row wrap', style: 'margin-bottom:18px' }, [
+      el('button', { class: 'btn', text: 'Open DevTools', onclick: () => void harbor.invoke('tabs:devtools', { tabId: active.id }) }),
+      el('button', { class: 'btn', text: 'Copy page HTML', onclick: () => void invoke(harbor.invoke('dev:html', { tabId: active.id })).then((h) => { if (h) copy(h); }) }),
+      el('button', { class: 'btn', text: 'Copy request log', onclick: () => copy(JSON.stringify(snap?.entries ?? [], null, 2)) }),
+    ]),
+  );
+
+  // Cookies (async)
+  const cookieSection = el('div', { class: 'section' }, [el('h3', { text: 'Cookies' })]);
+  const cookieList = el('div', { class: 'muted', text: 'Loading…' });
+  cookieSection.append(cookieList);
+  body.append(cookieSection);
+  void invoke(harbor.invoke('dev:cookies', { tabId: active.id })).then((cookies) => {
+    cookieList.replaceChildren();
+    if (!cookies || cookies.length === 0) { cookieList.append(el('span', { class: 'muted', text: 'No cookies for this page.' })); return; }
+    cookieList.className = '';
+    for (const c of cookies) {
+      cookieList.append(el('div', { class: 'dev-cookie' }, [
+        el('span', { class: 'k', text: c.name }),
+        el('span', { class: 'muted', text: c.domain }),
+        c.secure ? el('span', { class: 'pill', text: 'secure' }) : el('span', {}),
+        c.httpOnly ? el('span', { class: 'pill', text: 'httpOnly' }) : el('span', {}),
+      ]));
+    }
+  });
+
+  // Request log
+  if (snap && snap.entries.length > 0) {
+    const log = el('div', { class: 'section' }, [el('h3', { text: 'Request log' })]);
+    for (const e of [...snap.entries].reverse().slice(0, 80)) {
+      log.append(el('div', { class: `entry ${e.disposition}` }, [
+        el('div', { class: 'summary', text: `${e.disposition.toUpperCase()} · ${e.resourceType} · ${e.domain}` }),
+      ]));
+    }
+    body.append(log);
+  }
+}
+
+function devRow(k: string, v: string): HTMLElement {
+  return el('div', { class: 'dev-row' }, [
+    el('span', { class: 'dev-k', text: k }),
+    el('span', { class: 'dev-v', text: v }),
+  ]);
 }
 
 function renderSettings(body: HTMLElement): void {
