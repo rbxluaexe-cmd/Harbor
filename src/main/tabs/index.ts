@@ -40,6 +40,7 @@ interface TabEntry {
   title: string;
   loadState: TabLoadState;
   muted: boolean;
+  pinned: boolean;
 }
 
 export interface TabManagerDeps {
@@ -195,6 +196,7 @@ export class TabManager {
       title: 'New Tab',
       loadState: 'idle',
       muted: false,
+      pinned: false,
     };
     this.tabs.set(wc.id, entry);
 
@@ -412,6 +414,42 @@ export class TabManager {
     this.deps.bus.emit('tab:updated', this.buildInfo(entry));
   }
 
+  togglePin(tabId: number): void {
+    const entry = this.requireTab(tabId);
+    entry.pinned = !entry.pinned;
+    this.deps.bus.emit('tab:updated', this.buildInfo(entry));
+    this.deps.persistSession(this.serializeSession());
+  }
+
+  duplicate(tabId: number): void {
+    const entry = this.requireTab(tabId);
+    this.create(entry.compartmentId, entry.url || undefined);
+  }
+
+  closeOthers(tabId: number): void {
+    for (const id of [...this.tabs.keys()]) {
+      if (id !== tabId) this.close(id);
+    }
+    this.activate(tabId);
+  }
+
+  /** Native right-click menu for a tab chip (invoked from the chrome). */
+  showTabMenu(tabId: number): void {
+    const entry = this.tabs.get(tabId);
+    if (!entry) return;
+    const template: MenuItemConstructorOptions[] = [
+      { label: 'New tab', click: () => this.create() },
+      { label: 'Duplicate tab', click: () => this.duplicate(tabId) },
+      { type: 'separator' },
+      { label: entry.pinned ? 'Unpin tab' : 'Pin tab', click: () => this.togglePin(tabId) },
+      { label: entry.muted ? 'Unmute tab' : 'Mute tab', click: () => this.toggleMute(tabId) },
+      { type: 'separator' },
+      { label: 'Close tab', click: () => this.close(tabId) },
+      { label: 'Close other tabs', enabled: this.tabs.size > 1, click: () => this.closeOthers(tabId) },
+    ];
+    Menu.buildFromTemplate(template).popup(this.window ? { window: this.window } : {});
+  }
+
   getActiveId(): number | null {
     return this.activeTabId;
   }
@@ -452,7 +490,8 @@ export class TabManager {
       return;
     }
     for (const t of valid) {
-      this.create(t.compartmentId, t.url || undefined);
+      const info = this.create(t.compartmentId, t.url || undefined);
+      if (t.pinned) this.togglePin(info.id);
     }
   }
 
@@ -460,6 +499,7 @@ export class TabManager {
     return [...this.tabs.values()].map((e) => ({
       compartmentId: e.compartmentId,
       url: isRecordable(e.url) ? e.url : '',
+      pinned: e.pinned,
     }));
   }
   focusAddress(): void {
@@ -472,7 +512,7 @@ export class TabManager {
       return this.list();
     }
     if (isRecordable(entry.url)) {
-      this.closedStack.push({ compartmentId: entry.compartmentId, url: entry.url });
+      this.closedStack.push({ compartmentId: entry.compartmentId, url: entry.url, pinned: entry.pinned });
       if (this.closedStack.length > 25) this.closedStack.shift();
     }
     this.deps.fingerprint.detach(entry.view.webContents);
@@ -573,6 +613,7 @@ export class TabManager {
       canGoForward: wc.canGoForward(),
       audible: wc.isCurrentlyAudible(),
       muted: entry.muted,
+      pinned: entry.pinned,
     };
   }
 

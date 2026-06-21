@@ -45,6 +45,7 @@ export interface TabInfo {
   readonly canGoForward: boolean;
   readonly audible: boolean;
   readonly muted: boolean;
+  readonly pinned: boolean;
 }
 
 /** Whether a request was permitted, blocked, or redirected by the network layer. */

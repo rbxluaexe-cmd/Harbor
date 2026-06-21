@@ -100,6 +100,9 @@ export function registerIpcRouter(m: RouterModules): void {
   handle('tabs:toggleMute', (req) => {
     m.tabs.toggleMute(req.tabId);
   });
+  handle('tabs:contextMenu', (req) => {
+    m.tabs.showTabMenu(req.tabId);
+  });
 
   handle('ledger:get', (req) => m.ledger.snapshot(req.tabId));
 

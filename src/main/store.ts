@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { app } from 'electron';
-import type { ZodType } from 'zod';
+import type { ZodType, ZodTypeDef } from 'zod';
 
 export class JsonStore<T> {
   private readonly filePath: string;
@@ -17,7 +17,7 @@ export class JsonStore<T> {
 
   constructor(
     fileName: string,
-    private readonly schema: ZodType<T>,
+    private readonly schema: ZodType<T, ZodTypeDef, unknown>,
     private readonly fallback: () => T,
   ) {
     this.filePath = join(app.getPath('userData'), fileName);

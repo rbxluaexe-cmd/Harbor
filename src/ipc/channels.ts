@@ -84,6 +84,10 @@ export interface InvokeMap {
     request: { tabId: number };
     response: void;
   };
+  'tabs:contextMenu': {
+    request: { tabId: number };
+    response: void;
+  };
 
   'ledger:get': {
     request: { tabId: number };
@@ -276,6 +280,7 @@ export const INVOKE_CHANNELS = [
   'tabs:reload',
   'tabs:reassign',
   'tabs:toggleMute',
+  'tabs:contextMenu',
   'ledger:get',
   'presets:list',
   'presets:get',

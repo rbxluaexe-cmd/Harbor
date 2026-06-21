@@ -13,10 +13,17 @@ import { JsonStore } from '../store';
 export interface SessionTab {
   readonly compartmentId: string;
   readonly url: string;
+  readonly pinned: boolean;
 }
 
 const sessionSchema = z.object({
-  tabs: z.array(z.object({ compartmentId: z.string(), url: z.string() })),
+  tabs: z.array(
+    z.object({
+      compartmentId: z.string(),
+      url: z.string(),
+      pinned: z.boolean().optional().default(false),
+    }),
+  ),
 });
 
 type SessionData = z.infer<typeof sessionSchema>;

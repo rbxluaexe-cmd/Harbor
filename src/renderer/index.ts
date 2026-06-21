@@ -137,14 +137,14 @@ async function invoke<T>(p: Promise<T>): Promise<T | null> {
 function renderTabs(): void {
   const strip = $('tabs');
   strip.replaceChildren();
-  for (const tab of state.tabs) {
+  const ordered = [...state.tabs].sort((a, b) => Number(b.pinned) - Number(a.pinned));
+  for (const tab of ordered) {
     const compartment = compartmentFor(tab.compartmentId);
-    const close = el('span', { class: 'close', title: 'Close tab', onclick: (e: Event) => { e.stopPropagation(); void closeTab(tab.id); } });
-    close.append(icon('M5 5l8 8M13 5l-8 8', '0 0 18 18'));
     const lead = tab.loadState === 'loading'
       ? el('span', { class: 'spinner' })
       : el('span', { class: 'dot', style: `background:${compartment?.color ?? '#888'}` });
-    const children: HTMLElement[] = [lead, el('span', { class: 'title', text: tab.title || 'New Tab' })];
+    const children: HTMLElement[] = [lead];
+    if (!tab.pinned) children.push(el('span', { class: 'title', text: tab.title || 'New Tab' }));
     if (tab.audible || tab.muted) {
       const spk = el('span', {
         class: `audio${tab.muted ? ' muted' : ''}`,
@@ -154,9 +154,18 @@ function renderTabs(): void {
       spk.append(icon(tab.muted ? ICONS.muted : ICONS.volume));
       children.push(spk);
     }
-    children.push(close);
-    const chip = el('div', { class: `tab${tab.id === state.activeTabId ? ' active' : ''}`, title: tab.url }, children);
+    if (!tab.pinned) {
+      const close = el('span', { class: 'close', title: 'Close tab', onclick: (e: Event) => { e.stopPropagation(); void closeTab(tab.id); } });
+      close.append(icon('M5 5l8 8M13 5l-8 8', '0 0 18 18'));
+      children.push(close);
+    }
+    const chip = el('div', {
+      class: `tab${tab.id === state.activeTabId ? ' active' : ''}${tab.pinned ? ' pinned' : ''}`,
+      title: tab.url || tab.title,
+    }, children);
     chip.addEventListener('click', () => { void selectTab(tab.id); });
+    chip.addEventListener('contextmenu', (e: Event) => { e.preventDefault(); void harbor.invoke('tabs:contextMenu', { tabId: tab.id }); });
+    chip.addEventListener('auxclick', (e: Event) => { if ((e as MouseEvent).button === 1) { e.preventDefault(); void closeTab(tab.id); } });
     strip.append(chip);
   }
 }
