@@ -221,6 +221,7 @@ export interface Settings {
   readonly showBookmarksBar: boolean;
   readonly restoreSession: boolean;
   readonly theme: Theme;
+  readonly verticalTabs: boolean;
 }
 
 /** Top-level state pushed to the renderer on startup so it can render once. */

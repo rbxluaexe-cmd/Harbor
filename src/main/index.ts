@@ -198,6 +198,7 @@ function start(): void {
     startPageUrl: START_PAGE_URL,
     showLedgerPanel: () => settings.get().showLedgerPanel,
     showBookmarksBar: () => settings.get().showBookmarksBar,
+    showVerticalTabs: () => settings.get().verticalTabs,
     bookmarkCount: () => bookmarks.list().length,
     persistSession: (openTabs) => session.save(openTabs),
   });

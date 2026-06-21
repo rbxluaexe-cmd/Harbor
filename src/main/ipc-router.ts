@@ -62,6 +62,7 @@ export function registerIpcRouter(m: RouterModules): void {
     showBookmarksBar: m.settings.get().showBookmarksBar,
     restoreSession: m.settings.get().restoreSession,
     theme: m.settings.get().theme,
+    verticalTabs: m.settings.get().verticalTabs,
   });
 
   const bootstrap = (): BootstrapState => ({
@@ -188,6 +189,7 @@ export function registerIpcRouter(m: RouterModules): void {
       showBookmarksBar: boolean;
       restoreSession: boolean;
       theme: 'dark' | 'light';
+      verticalTabs: boolean;
     }> = {};
     if (patch.homepage !== undefined) {
       storePatch.homepage = patch.homepage;
@@ -204,10 +206,13 @@ export function registerIpcRouter(m: RouterModules): void {
     if (patch.theme !== undefined) {
       storePatch.theme = patch.theme;
     }
+    if (patch.verticalTabs !== undefined) {
+      storePatch.verticalTabs = patch.verticalTabs;
+    }
     if (Object.keys(storePatch).length > 0) {
       m.settings.patch(storePatch);
     }
-    if (patch.showLedgerPanel !== undefined || patch.showBookmarksBar !== undefined) {
+    if (patch.showLedgerPanel !== undefined || patch.showBookmarksBar !== undefined || patch.verticalTabs !== undefined) {
       m.tabs.relayout();
     }
     return composedSettings();

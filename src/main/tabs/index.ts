@@ -32,6 +32,7 @@ import type { PresetConfig } from '../../ipc';
 const BASE_TOP = 88;
 const BOOKMARKS_BAR = 34;
 const LEDGER_PANEL_WIDTH = 360;
+const SIDEBAR_WIDTH = 240; // vertical-tabs sidebar; must match the chrome CSS
 
 interface TabEntry {
   readonly view: WebContentsView;
@@ -56,6 +57,7 @@ export interface TabManagerDeps {
   readonly startPageUrl: string;
   readonly showLedgerPanel: () => boolean;
   readonly showBookmarksBar: () => boolean;
+  readonly showVerticalTabs: () => boolean;
   readonly bookmarkCount: () => number;
   /** Persist the current tab set for session restore. */
   readonly persistSession: (tabs: readonly SessionTab[]) => void;
@@ -607,11 +609,12 @@ export class TabManager {
     const w = width ?? 0;
     const h = height ?? 0;
     const panelWidth = this.deps.showLedgerPanel() ? LEDGER_PANEL_WIDTH : 0;
+    const left = this.deps.showVerticalTabs() ? SIDEBAR_WIDTH : 0;
     const top = this.topHeight();
     const contentBounds = {
-      x: 0,
+      x: left,
       y: top,
-      width: Math.max(0, w - panelWidth),
+      width: Math.max(0, w - left - panelWidth),
       height: Math.max(0, h - top),
     };
     if (this.activeTabId !== null) {

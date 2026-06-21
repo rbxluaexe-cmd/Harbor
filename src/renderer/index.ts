@@ -44,7 +44,7 @@ interface UiState {
 
 const state: UiState = {
   version: '',
-  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true, restoreSession: true, theme: 'dark' },
+  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true, restoreSession: true, theme: 'dark', verticalTabs: false },
   compartments: [],
   tabs: [],
   bookmarks: [],
@@ -168,7 +168,9 @@ async function invoke<T>(p: Promise<T>): Promise<T | null> {
 let dragTabId: number | null = null;
 
 function renderTabs(): void {
-  const strip = $('tabs');
+  const vertical = state.settings.verticalTabs;
+  const strip = vertical ? $('vtabs') : $('tabs');
+  (vertical ? $('tabs') : $('vtabs')).replaceChildren();
   strip.replaceChildren();
   state.tabs.forEach((tab, index) => {
     const compartment = compartmentFor(tab.compartmentId);
@@ -176,7 +178,7 @@ function renderTabs(): void {
       ? el('span', { class: 'spinner' })
       : el('span', { class: 'dot', style: `background:${compartment?.color ?? '#888'}` });
     const children: HTMLElement[] = [lead];
-    if (!tab.pinned) children.push(el('span', { class: 'title', text: tab.title || 'New Tab' }));
+    if (!tab.pinned || vertical) children.push(el('span', { class: 'title', text: tab.title || 'New Tab' }));
     if (tab.audible || tab.muted) {
       const spk = el('span', {
         class: `audio${tab.muted ? ' muted' : ''}`,
@@ -209,7 +211,9 @@ function renderTabs(): void {
       e.preventDefault();
       const de = e as DragEvent;
       const rect = chip.getBoundingClientRect();
-      const after = de.clientX - rect.left > rect.width / 2;
+      const after = vertical
+        ? de.clientY - rect.top > rect.height / 2
+        : de.clientX - rect.left > rect.width / 2;
       clearDropMarks();
       chip.classList.add(after ? 'drop-after' : 'drop-before');
       chip.dataset['drop'] = String(after ? index + 1 : index);
@@ -225,7 +229,7 @@ function renderTabs(): void {
 }
 
 function clearDropMarks(): void {
-  for (const c of document.querySelectorAll('#tabs .tab')) c.classList.remove('drop-before', 'drop-after');
+  for (const c of document.querySelectorAll('.tab')) c.classList.remove('drop-before', 'drop-after');
 }
 async function reorderTab(tabId: number, toIndex: number): Promise<void> {
   await invoke(harbor.invoke('tabs:reorder', { tabId, toIndex }));
@@ -240,6 +244,7 @@ function wireWindowControls(): void {
   maxButton.addEventListener('click', () => void harbor.invoke('window:toggleMaximize'));
   (ctrls.querySelector('[data-win="close"]') as HTMLElement).addEventListener('click', () => void harbor.invoke('window:close'));
   $('newtab').addEventListener('click', () => { void newTab(); });
+  $('vnewtab').addEventListener('click', () => { void newTab(); });
 }
 
 function setMaximized(maxed: boolean): void {
@@ -624,6 +629,7 @@ function renderSettings(body: HTMLElement): void {
     toggleRow('Show bookmarks bar', state.settings.showBookmarksBar, (v) => void saveSettings({ showBookmarksBar: v })),
     toggleRow('Restore tabs on launch', state.settings.restoreSession, (v) => void saveSettings({ restoreSession: v })),
     toggleRow('Light theme', state.settings.theme === 'light', (v) => void saveSettings({ theme: v ? 'light' : 'dark' })),
+    toggleRow('Vertical tabs', state.settings.verticalTabs, (v) => void saveSettings({ verticalTabs: v })),
   ]);
 
   const privacy = el('div', { class: 'section' }, [
@@ -829,7 +835,10 @@ function ensureActiveTab(): void {
   state.activeTabId = last ? last.id : null;
 }
 
-function applyTheme(): void { document.body.dataset['theme'] = state.settings.theme; }
+function applyTheme(): void {
+  document.body.dataset['theme'] = state.settings.theme;
+  document.body.classList.toggle('vertical', state.settings.verticalTabs);
+}
 
 function renderAll(): void { applyTheme(); renderTabs(); buildToolbar(); renderBookmarksBar(); renderPanel(); }
 

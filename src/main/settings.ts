@@ -12,6 +12,7 @@ const settingsSchema = z.object({
   showBookmarksBar: z.boolean(),
   restoreSession: z.boolean(),
   theme: z.enum(['dark', 'light']),
+  verticalTabs: z.boolean(),
 });
 
 export type StoredSettings = z.infer<typeof settingsSchema>;
@@ -27,6 +28,7 @@ export class SettingsStore {
       showBookmarksBar: true,
       restoreSession: true,
       theme: 'dark',
+      verticalTabs: false,
     }));
   }
 

@@ -163,6 +163,55 @@ svg {
 #winctrls svg { width: 12px; height: 12px; }
 #winctrls button[data-win="max"] svg rect { fill: none; }
 
+/* ---------------- Vertical tabs sidebar ---------------- */
+
+#sidebar {
+  position: fixed;
+  top: var(--titlebar-h);
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  background: var(--titlebar);
+  border-right: 1px solid var(--border);
+  display: none;
+  flex-direction: column;
+  padding: 8px;
+  gap: 6px;
+}
+body.vertical #sidebar { display: flex; }
+body.vertical #tabs { display: none; }
+body.vertical #newtab { display: none; }
+body.vertical #toolbar { left: 240px; }
+body.vertical #bookmarksbar { left: 240px; }
+
+#vnewtab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 9px;
+  color: var(--fg-dim);
+  justify-content: flex-start;
+}
+#vnewtab:hover { background: var(--surface); color: var(--fg); }
+#vnewtab svg { width: 15px; height: 15px; }
+
+#vtabs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; scrollbar-width: thin; }
+#vtabs::-webkit-scrollbar { width: 8px; }
+#vtabs::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 5px; border: 2px solid var(--titlebar); }
+#vtabs .tab {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 34px;
+  border-radius: 8px;
+  padding: 0 9px;
+  background: transparent;
+}
+#vtabs .tab.active { background: var(--surface); }
+#vtabs .tab.pinned { width: 100%; justify-content: flex-start; padding: 0 9px; }
+
 /* ---------------- Toolbar ---------------- */
 
 #toolbar {
