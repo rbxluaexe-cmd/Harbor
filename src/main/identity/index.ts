@@ -36,9 +36,12 @@ const PALETTE = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899
 
 /** The compartment new ephemeral tabs land in by default. */
 export const EPHEMERAL_COMPARTMENT_ID = 'ephemeral';
+/** The hardened, no-history private-browsing compartment. */
+export const INCOGNITO_COMPARTMENT_ID = 'incognito';
 
 const BUILTIN_COMPARTMENTS: readonly Compartment[] = [
   { id: EPHEMERAL_COMPARTMENT_ID, name: 'Ephemeral', color: '#94a3b8', persistent: false, builtin: true },
+  { id: INCOGNITO_COMPARTMENT_ID, name: 'Private', color: '#a855f7', persistent: false, builtin: true },
   { id: 'personal', name: 'Personal', color: '#3b82f6', persistent: true, builtin: true },
   { id: 'work', name: 'Work', color: '#10b981', persistent: true, builtin: true },
 ];

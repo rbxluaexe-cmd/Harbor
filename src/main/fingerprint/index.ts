@@ -38,7 +38,8 @@ export class FingerprintShield {
    * content view — repeated calls are ignored.
    */
   async attach(webContents: WebContents, compartmentId: string): Promise<void> {
-    const mode = this.config().fingerprintMode;
+    // Private (incognito) tabs always get the strongest fingerprint shielding.
+    const mode = compartmentId === 'incognito' ? 'strict' : this.config().fingerprintMode;
     if (mode === 'off') {
       return;
     }

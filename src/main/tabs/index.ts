@@ -20,7 +20,7 @@ import {
 
 import type { TabInfo, TabLoadState } from '../../ipc';
 import { Bus } from '../bus';
-import { CompartmentManager, EPHEMERAL_COMPARTMENT_ID } from '../identity';
+import { CompartmentManager, EPHEMERAL_COMPARTMENT_ID, INCOGNITO_COMPARTMENT_ID } from '../identity';
 import { FingerprintShield } from '../fingerprint';
 import { Ledger } from '../ledger';
 import { NetworkGuard } from '../network';
@@ -266,6 +266,7 @@ export class TabManager {
       else if (mod && key === '-') this.zoomActive(-0.5);
       else if (mod && key === '0') this.resetZoomActive();
       else if (mod && input.shift && key === 't') this.reopenClosed();
+      else if (mod && input.shift && key === 'n') this.create(INCOGNITO_COMPARTMENT_ID);
       else if (input.control && key === 'tab') this.cycle(input.shift ? -1 : 1);
       else if (mod && /^[1-9]$/.test(key)) this.activateIndex(Number(key) - 1);
       else handled = false;
@@ -321,7 +322,7 @@ export class TabManager {
     };
     wc.on('page-title-updated', (_e, title) => {
       entry.title = title;
-      if (isRecordable(entry.url)) {
+      if (isRecordable(entry.url) && entry.compartmentId !== INCOGNITO_COMPARTMENT_ID) {
         this.deps.bus.emit('history:visit', { url: entry.url, title });
       }
       update();
@@ -346,7 +347,8 @@ export class TabManager {
       // A new top-level document — the ledger for this tab starts fresh.
       entry.url = navUrl;
       this.deps.ledger.reset(wc.id);
-      if (isRecordable(navUrl)) {
+      // Private tabs are never recorded into history.
+      if (isRecordable(navUrl) && entry.compartmentId !== INCOGNITO_COMPARTMENT_ID) {
         this.deps.bus.emit('history:visit', { url: navUrl, title: entry.title });
       }
       this.deps.persistSession(this.serializeSession());
@@ -487,6 +489,7 @@ export class TabManager {
     if (!entry) return;
     const template: MenuItemConstructorOptions[] = [
       { label: 'New tab', click: () => this.create() },
+      { label: 'New private tab', click: () => this.create(INCOGNITO_COMPARTMENT_ID) },
       { label: 'Duplicate tab', click: () => this.duplicate(tabId) },
       { type: 'separator' },
       { label: entry.pinned ? 'Unpin tab' : 'Pin tab', click: () => this.togglePin(tabId) },
