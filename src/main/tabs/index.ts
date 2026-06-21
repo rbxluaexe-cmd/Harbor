@@ -9,7 +9,14 @@
  * fingerprint shield to inject — calling their public methods as the
  * orchestrator, without those modules knowing about each other.
  */
-import { BrowserWindow, WebContentsView, type WebContents } from 'electron';
+import {
+  BrowserWindow,
+  Menu,
+  WebContentsView,
+  clipboard,
+  type MenuItemConstructorOptions,
+  type WebContents,
+} from 'electron';
 
 import type { TabInfo, TabLoadState } from '../../ipc';
 import { Bus } from '../bus';
@@ -56,6 +63,8 @@ export class TabManager {
   private window: BrowserWindow | null = null;
   private readonly tabs = new Map<number, TabEntry>();
   private activeTabId: number | null = null;
+  /** Recently closed tabs, for reopen-closed-tab (Ctrl+Shift+T). */
+  private readonly closedStack: SessionTab[] = [];
 
   constructor(private readonly deps: TabManagerDeps) {
     this.deps.bus.on('duress:activated', (payload) => {
@@ -193,6 +202,7 @@ export class TabManager {
 
     this.wireTabEvents(entry);
     this.wireShortcuts(wc);
+    this.wireContextMenu(entry);
 
     this.window.contentView.addChildView(view);
     const startUrl = url ?? this.newTabTarget();
@@ -227,10 +237,52 @@ export class TabManager {
       else if (mod && (key === '=' || key === '+')) this.zoomActive(0.5);
       else if (mod && key === '-') this.zoomActive(-0.5);
       else if (mod && key === '0') this.resetZoomActive();
+      else if (mod && input.shift && key === 't') this.reopenClosed();
+      else if (input.control && key === 'tab') this.cycle(input.shift ? -1 : 1);
+      else if (mod && /^[1-9]$/.test(key)) this.activateIndex(Number(key) - 1);
       else handled = false;
       if (handled) {
         event.preventDefault();
       }
+    });
+  }
+
+  /** Native right-click menu, contextual to links / selection / editable fields. */
+  private wireContextMenu(entry: TabEntry): void {
+    const wc = entry.view.webContents;
+    wc.on('context-menu', (_e, params) => {
+      const template: MenuItemConstructorOptions[] = [];
+      if (params.linkURL) {
+        template.push(
+          { label: 'Open link in new tab', click: () => this.create(entry.compartmentId, params.linkURL) },
+          { label: 'Copy link address', click: () => clipboard.writeText(params.linkURL) },
+          { type: 'separator' },
+        );
+      }
+      if (params.isEditable) {
+        template.push({ role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' });
+      } else if (params.selectionText) {
+        const text = params.selectionText.trim();
+        template.push(
+          { role: 'copy' },
+          {
+            label: `Search for “${text.length > 24 ? `${text.slice(0, 24)}…` : text}”`,
+            click: () => this.create(entry.compartmentId, `https://duckduckgo.com/?q=${encodeURIComponent(text)}`),
+          },
+        );
+      } else {
+        template.push(
+          { label: 'Back', enabled: wc.canGoBack(), click: () => wc.goBack() },
+          { label: 'Forward', enabled: wc.canGoForward(), click: () => wc.goForward() },
+          { label: 'Reload', click: () => wc.reload() },
+        );
+      }
+      template.push(
+        { type: 'separator' },
+        { label: 'Inspect element', click: () => wc.inspectElement(params.x, params.y) },
+      );
+      const menu = Menu.buildFromTemplate(template);
+      menu.popup(this.window ? { window: this.window } : {});
     });
   }
 
@@ -298,6 +350,29 @@ export class TabManager {
       entry.view.setVisible(id === tabId);
     }
     this.layout();
+    this.deps.bus.emit('tab:active-changed', tabId);
+  }
+
+  /** Cycle to the next/previous tab (Ctrl+Tab / Ctrl+Shift+Tab). */
+  cycle(direction: 1 | -1): void {
+    const ids = [...this.tabs.keys()];
+    if (ids.length < 2 || this.activeTabId === null) return;
+    const idx = ids.indexOf(this.activeTabId);
+    const next = ids[(idx + direction + ids.length) % ids.length];
+    if (next !== undefined) this.activate(next);
+  }
+
+  /** Activate the nth tab (Ctrl+1..8); index 8 means "last" (Ctrl+9). */
+  activateIndex(index: number): void {
+    const ids = [...this.tabs.keys()];
+    const target = index >= 8 ? ids[ids.length - 1] : ids[index];
+    if (target !== undefined) this.activate(target);
+  }
+
+  /** Reopen the most recently closed tab (Ctrl+Shift+T). */
+  reopenClosed(): void {
+    const last = this.closedStack.pop();
+    if (last) this.create(last.compartmentId, last.url || undefined);
   }
 
   navigate(tabId: number, url: string): TabInfo {
@@ -384,6 +459,10 @@ export class TabManager {
     const entry = this.tabs.get(tabId);
     if (!entry) {
       return this.list();
+    }
+    if (isRecordable(entry.url)) {
+      this.closedStack.push({ compartmentId: entry.compartmentId, url: entry.url });
+      if (this.closedStack.length > 25) this.closedStack.shift();
     }
     this.deps.fingerprint.detach(entry.view.webContents);
     this.deps.ledger.remove(tabId);

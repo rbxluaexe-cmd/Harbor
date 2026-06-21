@@ -22,6 +22,8 @@ export interface InternalEventMap {
   'tab:updated': TabInfo;
   /** The set of open tabs changed. */
   'tab:list-changed': readonly TabInfo[];
+  /** The active tab changed. */
+  'tab:active-changed': number;
   /** The set of compartments changed. */
   'compartments:changed': readonly Compartment[];
   /** Duress mode fired. Carries the decoy target for the tab layer to switch to. */

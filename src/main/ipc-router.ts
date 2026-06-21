@@ -203,6 +203,7 @@ function forwardBusEvents(m: RouterModules): void {
 
   m.bus.on('tab:updated', (info) => send('tabs:updated', info));
   m.bus.on('tab:list-changed', (list) => send('tabs:list-changed', list));
+  m.bus.on('tab:active-changed', (id) => send('tabs:active-changed', id));
   m.bus.on('ledger:updated', (snapshot) => send('ledger:updated', snapshot));
   m.bus.on('compartments:changed', (list) => send('compartments:changed', list));
   m.bus.on('duress:activated', (payload) =>

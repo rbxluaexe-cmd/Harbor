@@ -221,6 +221,8 @@ export interface InvokeMap {
 export interface EventMap {
   'tabs:updated': TabInfo;
   'tabs:list-changed': readonly TabInfo[];
+  /** The active tab changed (e.g. via keyboard shortcut). */
+  'tabs:active-changed': number;
   'ledger:updated': LedgerSnapshot;
   'compartments:changed': readonly Compartment[];
   'duress:activated': { wipedCompartments: readonly string[]; decoyActivated: boolean };
@@ -300,6 +302,7 @@ export const INVOKE_CHANNELS = [
 export const EVENT_CHANNELS = [
   'tabs:updated',
   'tabs:list-changed',
+  'tabs:active-changed',
   'ledger:updated',
   'compartments:changed',
   'duress:activated',

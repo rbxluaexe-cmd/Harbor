@@ -700,6 +700,13 @@ function subscribe(): void {
     renderTabs();
     if (info.id === state.activeTabId) buildToolbar();
   });
+  harbor.on('tabs:active-changed', (id) => {
+    if (id === state.activeTabId) return;
+    state.activeTabId = id;
+    renderTabs();
+    buildToolbar();
+    void loadLedger(id).then(() => { if (state.panelMode === 'ledger') renderPanel(); });
+  });
   harbor.on('ledger:updated', (snap) => {
     state.ledgerByTab.set(snap.tabId, snap);
     if (snap.tabId === state.activeTabId) { buildToolbar(); if (state.panelMode === 'ledger') renderPanel(); }
