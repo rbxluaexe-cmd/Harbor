@@ -80,6 +80,10 @@ export interface InvokeMap {
     request: { tabId: number; compartmentId: string };
     response: TabInfo;
   };
+  'tabs:toggleMute': {
+    request: { tabId: number };
+    response: void;
+  };
 
   'ledger:get': {
     request: { tabId: number };
@@ -215,6 +219,11 @@ export interface InvokeMap {
     request: void;
     response: void;
   };
+
+  'data:clearBrowsing': {
+    request: void;
+    response: void;
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -266,6 +275,7 @@ export const INVOKE_CHANNELS = [
   'tabs:goForward',
   'tabs:reload',
   'tabs:reassign',
+  'tabs:toggleMute',
   'ledger:get',
   'presets:list',
   'presets:get',
@@ -297,6 +307,7 @@ export const INVOKE_CHANNELS = [
   'downloads:open',
   'downloads:showInFolder',
   'downloads:clear',
+  'data:clearBrowsing',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [

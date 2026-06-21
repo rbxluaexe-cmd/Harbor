@@ -100,6 +100,8 @@ const ICONS = {
   star: 'M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 17l-5.25 2.65 1-5.85L3.5 9.7l5.9-.9z',
   trash: ['M4 7h16', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13'],
   download: ['M12 3v11', 'M8 10l4 4 4-4', 'M5 20h14'],
+  volume: ['M4 9v6h4l5 4V5L8 9z', 'M16 8.5a4 4 0 0 1 0 7'],
+  muted: ['M4 9v6h4l5 4V5L8 9z', 'M16 9.5l5 5M21 9.5l-5 5'],
 };
 
 function fmtBytes(n: number): string {
@@ -139,11 +141,21 @@ function renderTabs(): void {
     const compartment = compartmentFor(tab.compartmentId);
     const close = el('span', { class: 'close', title: 'Close tab', onclick: (e: Event) => { e.stopPropagation(); void closeTab(tab.id); } });
     close.append(icon('M5 5l8 8M13 5l-8 8', '0 0 18 18'));
-    const chip = el('div', { class: `tab${tab.id === state.activeTabId ? ' active' : ''}`, title: tab.url }, [
-      el('span', { class: 'dot', style: `background:${compartment?.color ?? '#888'}` }),
-      el('span', { class: 'title', text: tab.title || 'New Tab' }),
-      close,
-    ]);
+    const lead = tab.loadState === 'loading'
+      ? el('span', { class: 'spinner' })
+      : el('span', { class: 'dot', style: `background:${compartment?.color ?? '#888'}` });
+    const children: HTMLElement[] = [lead, el('span', { class: 'title', text: tab.title || 'New Tab' })];
+    if (tab.audible || tab.muted) {
+      const spk = el('span', {
+        class: `audio${tab.muted ? ' muted' : ''}`,
+        title: tab.muted ? 'Unmute tab' : 'Mute tab',
+        onclick: (e: Event) => { e.stopPropagation(); void harbor.invoke('tabs:toggleMute', { tabId: tab.id }); },
+      });
+      spk.append(icon(tab.muted ? ICONS.muted : ICONS.volume));
+      children.push(spk);
+    }
+    children.push(close);
+    const chip = el('div', { class: `tab${tab.id === state.activeTabId ? ' active' : ''}`, title: tab.url }, children);
     chip.addEventListener('click', () => { void selectTab(tab.id); });
     strip.append(chip);
   }
@@ -497,7 +509,13 @@ function renderSettings(body: HTMLElement): void {
     toggleRow('Restore tabs on launch', state.settings.restoreSession, (v) => void saveSettings({ restoreSession: v })),
   ]);
 
-  body.append(presetSection, homeSection, renderSyncSection(), renderDuressSection(), renderUpdateSection());
+  const privacy = el('div', { class: 'section' }, [
+    el('h3', { text: 'Privacy' }),
+    el('div', { class: 'muted', text: 'Wipe cookies, cache, and storage across all compartments, and clear history.' }),
+    el('button', { class: 'btn', style: 'margin-top:8px', text: 'Clear all browsing data', onclick: () => void clearBrowsing() }),
+  ]);
+
+  body.append(presetSection, homeSection, privacy, renderSyncSection(), renderDuressSection(), renderUpdateSection());
 }
 
 function renderSyncSection(): HTMLElement {
@@ -664,6 +682,11 @@ async function navigateActive(url: string): Promise<void> {
   await invoke(harbor.invoke('tabs:navigate', { tabId: state.activeTabId, url }));
 }
 async function removeHistory(id: string): Promise<void> { await invoke(harbor.invoke('history:remove', { id })); reloadHistory?.(); }
+async function clearBrowsing(): Promise<void> {
+  if (!window.confirm('Clear cookies, cache, storage (all compartments) and history?')) return;
+  await invoke(harbor.invoke('data:clearBrowsing'));
+  window.alert('Browsing data cleared.');
+}
 async function clearHistory(): Promise<void> {
   if (!window.confirm('Clear all browsing history?')) return;
   await invoke(harbor.invoke('history:clear'));

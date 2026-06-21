@@ -104,6 +104,16 @@ button svg, #findbar svg {
   color: var(--fg);
 }
 .tab .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.tab .spinner {
+  width: 11px; height: 11px; border-radius: 50%; flex: 0 0 auto;
+  border: 2px solid var(--surface-2); border-top-color: var(--accent);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.tab .audio { width: 17px; height: 17px; border-radius: 4px; color: var(--accent); flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; }
+.tab .audio.muted { color: var(--fg-dim); }
+.tab .audio:hover { background: var(--surface-2); }
+.tab .audio svg { width: 13px; height: 13px; }
 .tab .title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .tab .close {
   width: 18px; height: 18px; border-radius: 5px; color: var(--fg-dim);

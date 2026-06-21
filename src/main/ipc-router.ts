@@ -96,6 +96,9 @@ export function registerIpcRouter(m: RouterModules): void {
     m.tabs.reload(req.tabId);
   });
   handle('tabs:reassign', (req) => m.tabs.reassign(req.tabId, req.compartmentId));
+  handle('tabs:toggleMute', (req) => {
+    m.tabs.toggleMute(req.tabId);
+  });
 
   handle('ledger:get', (req) => m.ledger.snapshot(req.tabId));
 
@@ -154,6 +157,11 @@ export function registerIpcRouter(m: RouterModules): void {
   });
   handle('downloads:clear', () => {
     m.downloads.clear();
+  });
+
+  handle('data:clearBrowsing', async () => {
+    await m.compartments.wipe([]); // [] = all compartments
+    m.history.clear();
   });
 
   handle('settings:get', () => composedSettings());

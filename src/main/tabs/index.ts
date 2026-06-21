@@ -39,6 +39,7 @@ interface TabEntry {
   url: string;
   title: string;
   loadState: TabLoadState;
+  muted: boolean;
 }
 
 export interface TabManagerDeps {
@@ -193,6 +194,7 @@ export class TabManager {
       url: '',
       title: 'New Tab',
       loadState: 'idle',
+      muted: false,
     };
     this.tabs.set(wc.id, entry);
 
@@ -312,6 +314,8 @@ export class TabManager {
         update();
       }
     });
+    wc.on('media-started-playing', () => update());
+    wc.on('media-paused', () => update());
     wc.on('did-navigate', (_e, navUrl) => {
       // A new top-level document — the ledger for this tab starts fresh.
       entry.url = navUrl;
@@ -399,6 +403,13 @@ export class TabManager {
 
   reload(tabId: number): void {
     this.requireTab(tabId).view.webContents.reload();
+  }
+
+  toggleMute(tabId: number): void {
+    const entry = this.requireTab(tabId);
+    entry.muted = !entry.muted;
+    entry.view.webContents.setAudioMuted(entry.muted);
+    this.deps.bus.emit('tab:updated', this.buildInfo(entry));
   }
 
   getActiveId(): number | null {
@@ -560,6 +571,8 @@ export class TabManager {
       loadState: entry.loadState,
       canGoBack: wc.canGoBack(),
       canGoForward: wc.canGoForward(),
+      audible: wc.isCurrentlyAudible(),
+      muted: entry.muted,
     };
   }
 

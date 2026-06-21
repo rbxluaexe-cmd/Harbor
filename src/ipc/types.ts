@@ -43,6 +43,8 @@ export interface TabInfo {
   readonly loadState: TabLoadState;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
+  readonly audible: boolean;
+  readonly muted: boolean;
 }
 
 /** Whether a request was permitted, blocked, or redirected by the network layer. */
