@@ -10,6 +10,7 @@ const settingsSchema = z.object({
   homepage: z.string(),
   showLedgerPanel: z.boolean(),
   showBookmarksBar: z.boolean(),
+  restoreSession: z.boolean(),
 });
 
 export type StoredSettings = z.infer<typeof settingsSchema>;
@@ -23,6 +24,7 @@ export class SettingsStore {
       homepage: '',
       showLedgerPanel: true,
       showBookmarksBar: true,
+      restoreSession: true,
     }));
   }
 

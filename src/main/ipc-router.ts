@@ -20,6 +20,7 @@ import { app } from 'electron';
 import { Bus } from './bus';
 import { BookmarksManager } from './bookmarks';
 import { CompartmentManager } from './identity';
+import { DownloadsManager } from './downloads';
 import { DuressController } from './duress';
 import { HistoryManager } from './history';
 import { Ledger } from './ledger';
@@ -41,6 +42,7 @@ export interface RouterModules {
   readonly settings: SettingsStore;
   readonly bookmarks: BookmarksManager;
   readonly history: HistoryManager;
+  readonly downloads: DownloadsManager;
 }
 
 export function registerIpcRouter(m: RouterModules): void {
@@ -56,6 +58,7 @@ export function registerIpcRouter(m: RouterModules): void {
     homepage: m.settings.get().homepage,
     showLedgerPanel: m.settings.get().showLedgerPanel,
     showBookmarksBar: m.settings.get().showBookmarksBar,
+    restoreSession: m.settings.get().restoreSession,
   });
 
   const bootstrap = (): BootstrapState => ({
@@ -142,13 +145,29 @@ export function registerIpcRouter(m: RouterModules): void {
     m.history.clear();
   });
 
+  handle('downloads:list', () => m.downloads.list());
+  handle('downloads:open', (req) => {
+    m.downloads.open(req.id);
+  });
+  handle('downloads:showInFolder', (req) => {
+    m.downloads.showInFolder(req.id);
+  });
+  handle('downloads:clear', () => {
+    m.downloads.clear();
+  });
+
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {
     const patch = req.patch;
     if (patch.activePreset !== undefined) {
       m.presets.apply(patch.activePreset);
     }
-    const storePatch: Partial<{ homepage: string; showLedgerPanel: boolean; showBookmarksBar: boolean }> = {};
+    const storePatch: Partial<{
+      homepage: string;
+      showLedgerPanel: boolean;
+      showBookmarksBar: boolean;
+      restoreSession: boolean;
+    }> = {};
     if (patch.homepage !== undefined) {
       storePatch.homepage = patch.homepage;
     }
@@ -157,6 +176,9 @@ export function registerIpcRouter(m: RouterModules): void {
     }
     if (patch.showBookmarksBar !== undefined) {
       storePatch.showBookmarksBar = patch.showBookmarksBar;
+    }
+    if (patch.restoreSession !== undefined) {
+      storePatch.restoreSession = patch.restoreSession;
     }
     if (Object.keys(storePatch).length > 0) {
       m.settings.patch(storePatch);
@@ -193,6 +215,7 @@ function forwardBusEvents(m: RouterModules): void {
   m.bus.on('sync:changed', (status) => send('sync:changed', status));
   m.bus.on('bookmarks:changed', (list) => send('bookmarks:changed', list));
   m.bus.on('history:changed', () => send('history:changed', null));
+  m.bus.on('downloads:changed', (list) => send('downloads:changed', list));
 
   // Sanity: every declared event channel is wired above.
   void EVENT_CHANNELS;

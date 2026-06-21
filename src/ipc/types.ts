@@ -177,12 +177,28 @@ export interface HistoryEntry {
   readonly visitedAt: number;
 }
 
+/** Lifecycle state of a download. */
+export type DownloadState = 'progressing' | 'completed' | 'cancelled' | 'interrupted';
+
+/** A tracked download. */
+export interface DownloadItem {
+  readonly id: string;
+  readonly filename: string;
+  readonly url: string;
+  readonly state: DownloadState;
+  readonly receivedBytes: number;
+  readonly totalBytes: number;
+  readonly savePath: string;
+  readonly startedAt: number;
+}
+
 /** User-facing settings independent of the active preset. */
 export interface Settings {
   readonly activePreset: string;
   readonly homepage: string;
   readonly showLedgerPanel: boolean;
   readonly showBookmarksBar: boolean;
+  readonly restoreSession: boolean;
 }
 
 /** Top-level state pushed to the renderer on startup so it can render once. */

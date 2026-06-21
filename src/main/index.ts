@@ -20,8 +20,10 @@ import { app, dialog, globalShortcut, Menu } from 'electron';
 import { Bus } from './bus';
 import { BookmarksManager } from './bookmarks';
 import { CompartmentManager } from './identity';
+import { DownloadsManager } from './downloads';
 import { DuressController } from './duress';
 import { HistoryManager } from './history';
+import { SessionManager } from './session';
 import { FingerprintShield } from './fingerprint';
 import { Ledger } from './ledger';
 import { NetworkGuard } from './network';
@@ -124,7 +126,9 @@ function start(): void {
     () => presets.current(),
     (id) => tabs.getTabUrl(id),
   );
+  const downloads = new DownloadsManager(bus);
   compartments.registerSessionConfigurator(network.configureSession);
+  compartments.registerSessionConfigurator(downloads.attach);
 
   const fingerprint = new FingerprintShield(bus, () => presets.current());
   const ledger = new Ledger(bus);
@@ -132,6 +136,7 @@ function start(): void {
   const update = new UpdateChecker();
   const bookmarks = new BookmarksManager(bus);
   const history = new HistoryManager(bus);
+  const session = new SessionManager();
 
   const syncProvider: SyncDataProvider = {
     collect: () => ({
@@ -168,9 +173,10 @@ function start(): void {
     showLedgerPanel: () => settings.get().showLedgerPanel,
     showBookmarksBar: () => settings.get().showBookmarksBar,
     bookmarkCount: () => bookmarks.list().length,
+    persistSession: (openTabs) => session.save(openTabs),
   });
 
-  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history });
+  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history, downloads });
 
   const preloadPath = join(__dirname, '..', 'preload', 'index.js');
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');
@@ -185,10 +191,14 @@ function start(): void {
     logLine(`duress.init failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 
-  // Open the initial tab immediately; the chrome UI picks it up via bootstrap
-  // when it finishes loading, so we don't depend on event timing.
-  tabs.create();
-  logLine('initial tab created');
+  // Restore the previous session (or open a single start-page tab). The chrome
+  // UI picks tabs up via bootstrap when it finishes loading.
+  if (settings.get().restoreSession) {
+    tabs.restore(session.load());
+  } else {
+    tabs.create();
+  }
+  logLine('initial tab(s) created');
 
   win.on('closed', () => {
     duress.dispose();

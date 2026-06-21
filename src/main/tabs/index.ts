@@ -17,6 +17,7 @@ import { CompartmentManager, EPHEMERAL_COMPARTMENT_ID } from '../identity';
 import { FingerprintShield } from '../fingerprint';
 import { Ledger } from '../ledger';
 import { NetworkGuard } from '../network';
+import type { SessionTab } from '../session';
 import type { PresetConfig } from '../../ipc';
 
 // Must match the chrome CSS: title bar (40) + toolbar (48), plus the optional
@@ -47,6 +48,8 @@ export interface TabManagerDeps {
   readonly showLedgerPanel: () => boolean;
   readonly showBookmarksBar: () => boolean;
   readonly bookmarkCount: () => number;
+  /** Persist the current tab set for session restore. */
+  readonly persistSession: (tabs: readonly SessionTab[]) => void;
 }
 
 export class TabManager {
@@ -162,7 +165,8 @@ export class TabManager {
     if (!this.window) {
       throw new Error('Window is not initialised');
     }
-    const targetCompartment = compartmentId ?? this.defaultCompartment();
+    const requested = compartmentId ?? this.defaultCompartment();
+    const targetCompartment = this.deps.compartments.get(requested) ? requested : this.defaultCompartment();
     const session = this.deps.compartments.sessionFor(targetCompartment);
     const view = new WebContentsView({
       webPreferences: {
@@ -220,6 +224,9 @@ export class TabManager {
       else if (input.alt && key === 'arrowright') this.forwardActive();
       else if ((mod && input.shift && key === 'i') || key === 'f12') this.toggleDevToolsActive();
       else if (mod && key === 'f') this.window?.webContents.send('ui:find', null);
+      else if (mod && (key === '=' || key === '+')) this.zoomActive(0.5);
+      else if (mod && key === '-') this.zoomActive(-0.5);
+      else if (mod && key === '0') this.resetZoomActive();
       else handled = false;
       if (handled) {
         event.preventDefault();
@@ -260,6 +267,7 @@ export class TabManager {
       if (isRecordable(navUrl)) {
         this.deps.bus.emit('history:visit', { url: navUrl, title: entry.title });
       }
+      this.deps.persistSession(this.serializeSession());
       update();
     });
     wc.on('did-navigate-in-page', (_e, navUrl, isMainFrame) => {
@@ -340,6 +348,33 @@ export class TabManager {
     const wc = this.requireTab(this.activeTabId).view.webContents;
     if (wc.isDevToolsOpened()) wc.closeDevTools();
     else wc.openDevTools({ mode: 'detach' });
+  }
+  zoomActive(delta: number): void {
+    if (this.activeTabId === null) return;
+    const wc = this.requireTab(this.activeTabId).view.webContents;
+    wc.setZoomLevel(Math.max(-5, Math.min(5, wc.getZoomLevel() + delta)));
+  }
+  resetZoomActive(): void {
+    if (this.activeTabId !== null) this.requireTab(this.activeTabId).view.webContents.setZoomLevel(0);
+  }
+
+  /** Reopen tabs from a saved session. Falls back to a single start-page tab. */
+  restore(tabs: readonly SessionTab[]): void {
+    const valid = tabs.filter((t) => t.compartmentId.length > 0);
+    if (valid.length === 0) {
+      this.create();
+      return;
+    }
+    for (const t of valid) {
+      this.create(t.compartmentId, t.url || undefined);
+    }
+  }
+
+  private serializeSession(): readonly SessionTab[] {
+    return [...this.tabs.values()].map((e) => ({
+      compartmentId: e.compartmentId,
+      url: isRecordable(e.url) ? e.url : '',
+    }));
   }
   focusAddress(): void {
     this.window?.webContents.send('ui:focus-address', null);
@@ -451,6 +486,7 @@ export class TabManager {
 
   private emitListChanged(): void {
     this.deps.bus.emit('tab:list-changed', this.list());
+    this.deps.persistSession(this.serializeSession());
   }
 }
 

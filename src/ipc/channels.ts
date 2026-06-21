@@ -10,6 +10,7 @@ import type {
   BootstrapState,
   Bookmark,
   Compartment,
+  DownloadItem,
   DuressConfig,
   DuressStatus,
   HistoryEntry,
@@ -197,6 +198,23 @@ export interface InvokeMap {
     request: void;
     response: void;
   };
+
+  'downloads:list': {
+    request: void;
+    response: readonly DownloadItem[];
+  };
+  'downloads:open': {
+    request: { id: string };
+    response: void;
+  };
+  'downloads:showInFolder': {
+    request: { id: string };
+    response: void;
+  };
+  'downloads:clear': {
+    request: void;
+    response: void;
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -220,6 +238,8 @@ export interface EventMap {
   'bookmarks:changed': readonly Bookmark[];
   /** History changed; the renderer reloads the history view if it is open. */
   'history:changed': null;
+  /** The downloads list changed (new download, progress, or completion). */
+  'downloads:changed': readonly DownloadItem[];
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -271,6 +291,10 @@ export const INVOKE_CHANNELS = [
   'history:list',
   'history:remove',
   'history:clear',
+  'downloads:list',
+  'downloads:open',
+  'downloads:showInFolder',
+  'downloads:clear',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -287,4 +311,5 @@ export const EVENT_CHANNELS = [
   'find:result',
   'bookmarks:changed',
   'history:changed',
+  'downloads:changed',
 ] as const satisfies readonly EventChannel[];

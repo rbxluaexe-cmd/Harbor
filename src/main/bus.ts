@@ -10,7 +10,7 @@
  */
 import { EventEmitter } from 'node:events';
 
-import type { Bookmark, Compartment, LedgerSnapshot, PresetConfig, SyncStatus, TabInfo } from '../ipc';
+import type { Bookmark, Compartment, DownloadItem, LedgerSnapshot, PresetConfig, SyncStatus, TabInfo } from '../ipc';
 import type { RawObservation } from './internal-types';
 
 export interface InternalEventMap {
@@ -42,6 +42,8 @@ export interface InternalEventMap {
   'history:visit': { url: string; title: string };
   /** History changed (a visit was recorded, removed, or cleared). */
   'history:changed': void;
+  /** Downloads list changed. */
+  'downloads:changed': readonly DownloadItem[];
 }
 
 export type InternalEvent = keyof InternalEventMap;

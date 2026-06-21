@@ -11,6 +11,7 @@ import type {
   BootstrapState,
   Bookmark,
   Compartment,
+  DownloadItem,
   DuressConfig,
   HistoryEntry,
   LedgerSnapshot,
@@ -30,6 +31,7 @@ interface UiState {
   compartments: readonly Compartment[];
   tabs: readonly TabInfo[];
   bookmarks: readonly Bookmark[];
+  downloads: readonly DownloadItem[];
   presets: readonly PresetSummary[];
   sync: SyncStatus;
   duress: DuressConfig;
@@ -40,10 +42,11 @@ interface UiState {
 
 const state: UiState = {
   version: '',
-  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true },
+  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true, restoreSession: true },
   compartments: [],
   tabs: [],
   bookmarks: [],
+  downloads: [],
   presets: [],
   sync: { enabled: false, lastSyncedAt: null, pendingChanges: 0, serverConfigured: false },
   duress: { accelerator: '', wipeCompartments: [], decoyCompartmentId: null, enabled: false },
@@ -96,7 +99,15 @@ const ICONS = {
   search: ['M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14z', 'M20 20l-3.5-3.5'],
   star: 'M12 3.5l2.6 5.3 5.9.9-4.25 4.1 1 5.85L12 17l-5.25 2.65 1-5.85L3.5 9.7l5.9-.9z',
   trash: ['M4 7h16', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13'],
+  download: ['M12 3v11', 'M8 10l4 4 4-4', 'M5 20h14'],
 };
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  return `${(n / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
 
 function $(id: string): HTMLElement {
   const node = document.getElementById(id);
@@ -207,6 +218,15 @@ function buildToolbar(): void {
   star.append(icon(ICONS.star));
   star.toggleAttribute('disabled', !isHttp);
 
+  const activeDownloads = state.downloads.filter((d) => d.state === 'progressing').length;
+  const dlBtn = el('button', {
+    class: `tool-btn${activeDownloads > 0 ? ' on' : ''}`,
+    title: 'Downloads',
+    onclick: () => toggleDownloads(),
+  });
+  dlBtn.append(icon(ICONS.download));
+  if (activeDownloads > 0) dlBtn.append(el('span', { class: 'badge', text: String(activeDownloads) }));
+
   const shield = el('button', {
     class: `tool-btn${state.settings.showLedgerPanel ? ' on' : ''}`,
     title: 'Privacy panel',
@@ -214,7 +234,7 @@ function buildToolbar(): void {
   });
   shield.append(icon(ICONS.shield));
 
-  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, star, shield);
+  toolbar.append(back, fwd, reload, urlwrap, scoreBadge, compartmentSelect, star, dlBtn, shield);
 
   back.toggleAttribute('disabled', !active?.canGoBack);
   fwd.toggleAttribute('disabled', !active?.canGoForward);
@@ -272,6 +292,54 @@ function doFind(forward: boolean): void {
   const text = findInput.value;
   if (!text) { findCount.textContent = ''; void harbor.invoke('find:stop'); return; }
   void harbor.invoke('find:start', { text, forward });
+}
+
+// --- downloads popover -------------------------------------------------------
+
+function toggleDownloads(): void {
+  const dl = $('downloads');
+  const willShow = dl.hasAttribute('hidden');
+  dl.toggleAttribute('hidden', !willShow);
+  if (willShow) renderDownloads();
+}
+
+function renderDownloads(): void {
+  const dl = $('downloads');
+  if (dl.hasAttribute('hidden')) return;
+  const header = el('div', { class: 'dl-head' }, [
+    el('span', { text: 'Downloads' }),
+    el('button', { class: 'btn', text: 'Clear', onclick: () => void harbor.invoke('downloads:clear') }),
+  ]);
+  const listEl = el('div', { class: 'dl-list' });
+  if (state.downloads.length === 0) {
+    listEl.append(el('p', { class: 'muted', text: 'No downloads yet.' }));
+  } else {
+    for (const d of state.downloads) listEl.append(downloadRow(d));
+  }
+  dl.replaceChildren(header, listEl);
+}
+
+function downloadRow(d: DownloadItem): HTMLElement {
+  const pct = d.state === 'completed' ? 100 : d.totalBytes > 0 ? Math.round((d.receivedBytes / d.totalBytes) * 100) : 0;
+  const meta =
+    d.state === 'progressing'
+      ? `${fmtBytes(d.receivedBytes)} / ${d.totalBytes > 0 ? fmtBytes(d.totalBytes) : '?'}`
+      : d.state === 'completed'
+        ? fmtBytes(d.receivedBytes)
+        : d.state;
+  const actions: HTMLElement[] = [];
+  if (d.state === 'completed') {
+    actions.push(el('button', { class: 'btn sm', text: 'Open', onclick: () => void harbor.invoke('downloads:open', { id: d.id }) }));
+    actions.push(el('button', { class: 'btn sm', text: 'Folder', onclick: () => void harbor.invoke('downloads:showInFolder', { id: d.id }) }));
+  }
+  return el('div', { class: 'dl-row' }, [
+    el('div', { class: 't', text: d.filename, title: d.url }),
+    el('div', { class: 'dl-bar' }, [el('div', { class: `dl-fill ${d.state}`, style: `width:${pct}%` })]),
+    el('div', { class: 'row', style: 'justify-content:space-between;align-items:center;margin-top:5px' }, [
+      el('span', { class: 'muted', text: meta }),
+      el('div', { class: 'row' }, actions),
+    ]),
+  ]);
 }
 
 // --- bookmarks bar -----------------------------------------------------------
@@ -349,6 +417,13 @@ function stat(n: number, label: string): HTMLElement {
   return el('div', { class: 'stat' }, [el('div', { class: 'n', text: String(n) }), el('div', { class: 'l', text: label })]);
 }
 
+function toggleRow(label: string, checked: boolean, onChange: (v: boolean) => void): HTMLElement {
+  const cb = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  cb.checked = checked;
+  cb.addEventListener('change', () => onChange(cb.checked));
+  return el('label', { class: 'row', style: 'margin-top:8px' }, [cb, el('span', { text: ` ${label}` })]);
+}
+
 let reloadHistory: (() => void) | null = null;
 
 async function renderHistory(body: HTMLElement): Promise<void> {
@@ -418,6 +493,8 @@ function renderSettings(body: HTMLElement): void {
     el('h3', { text: 'General' }),
     el('div', { class: 'field' }, [el('label', { text: 'Homepage' }), homeInput,
       el('button', { class: 'btn', text: 'Save homepage', onclick: () => void saveSettings({ homepage: homeInput.value }) })]),
+    toggleRow('Show bookmarks bar', state.settings.showBookmarksBar, (v) => void saveSettings({ showBookmarksBar: v })),
+    toggleRow('Restore tabs on launch', state.settings.restoreSession, (v) => void saveSettings({ restoreSession: v })),
   ]);
 
   body.append(presetSection, homeSection, renderSyncSection(), renderDuressSection(), renderUpdateSection());
@@ -636,6 +713,7 @@ function subscribe(): void {
   harbor.on('find:result', ({ matches, active }) => { findCount.textContent = matches > 0 ? `${active}/${matches}` : 'No results'; });
   harbor.on('bookmarks:changed', (list) => { state.bookmarks = list; renderTabs(); buildToolbar(); renderBookmarksBar(); });
   harbor.on('history:changed', () => { if (state.panelMode === 'history') reloadHistory?.(); });
+  harbor.on('downloads:changed', (list) => { state.downloads = list; buildToolbar(); renderDownloads(); });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
@@ -660,6 +738,8 @@ async function init(): Promise<void> {
     state.duress = boot.duress.config;
     ensureActiveTab();
   }
+  const dls = await invoke(harbor.invoke('downloads:list'));
+  if (dls) state.downloads = dls;
   subscribe();
   renderAll();
   const maxed = await invoke(harbor.invoke('window:isMaximized'));
