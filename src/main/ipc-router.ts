@@ -177,6 +177,8 @@ export function registerIpcRouter(m: RouterModules): void {
 
   handle('permissions:get', (req) => m.permissions.list(req.origin));
   handle('permissions:set', (req) => m.permissions.set(req.origin, req.permission, req.decision));
+  handle('permissions:all', () => m.permissions.allSites());
+  handle('permissions:clearOrigin', (req) => m.permissions.clearOrigin(req.origin));
 
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {

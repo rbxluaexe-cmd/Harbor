@@ -112,10 +112,12 @@ svg {
   color: var(--fg-dim);
   position: relative;
 }
-.tab:hover { background: rgba(255, 255, 255, 0.04); color: var(--fg); }
+.tab { transition: background 0.12s ease, color 0.12s ease; }
+.tab:hover { background: rgba(255, 255, 255, 0.05); color: var(--fg); }
 .tab.active {
   background: var(--toolbar);
   color: var(--fg);
+  box-shadow: inset 0 2px 0 var(--accent);
 }
 .tab.pinned {
   min-width: 0;
@@ -141,6 +143,7 @@ svg {
 .tab .close {
   width: 18px; height: 18px; border-radius: 5px; color: var(--fg-dim);
   flex: 0 0 auto; opacity: 0; transition: opacity 0.1s;
+  display: grid; place-items: center;
 }
 .tab:hover .close, .tab.active .close { opacity: 1; }
 .tab .close:hover { background: var(--surface-2); color: var(--fg); }
@@ -229,7 +232,7 @@ body.vertical #bookmarksbar { left: 240px; }
 
 .nav-btn {
   width: 32px; height: 32px; border-radius: 8px; color: var(--fg-dim);
-  flex: 0 0 auto;
+  flex: 0 0 auto; transition: background 0.12s ease, color 0.12s ease;
 }
 .nav-btn:hover:not(:disabled) { background: var(--surface); color: var(--fg); }
 .nav-btn:disabled { opacity: 0.3; }
@@ -293,6 +296,7 @@ select#compartment {
 .tool-btn {
   width: 36px; height: 34px; border-radius: 17px; color: var(--fg-dim);
   flex: 0 0 auto; background: var(--surface);
+  transition: background 0.12s ease, color 0.12s ease;
 }
 .tool-btn:hover:not(:disabled) { color: var(--fg); }
 .tool-btn:disabled { opacity: 0.3; }
@@ -367,7 +371,7 @@ select#compartment {
 .bm-chip:hover { background: var(--surface); color: var(--fg); }
 .bm-chip .fav { width: 14px; height: 14px; border-radius: 4px; flex: 0 0 auto; background: var(--accent); display: grid; place-items: center; color: #04121f; font-size: 9px; font-weight: 700; }
 .bm-chip .label { overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
-.bm-chip .x { opacity: 0; width: 14px; height: 14px; border-radius: 4px; }
+.bm-chip .x { opacity: 0; width: 14px; height: 14px; border-radius: 4px; display: grid; place-items: center; }
 .bm-chip:hover .x { opacity: 0.7; }
 .bm-chip .x:hover { background: var(--surface-2); opacity: 1; }
 .bm-chip .x svg { width: 10px; height: 10px; }
@@ -383,7 +387,7 @@ select#compartment {
 .hist-row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-row .u { color: var(--fg-dim); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hist-row .when { color: var(--fg-dim); font-size: 11px; flex: 0 0 auto; }
-.hist-row .x { opacity: 0; width: 22px; height: 22px; border-radius: 6px; color: var(--fg-dim); flex: 0 0 auto; }
+.hist-row .x { opacity: 0; width: 22px; height: 22px; border-radius: 6px; color: var(--fg-dim); flex: 0 0 auto; display: grid; place-items: center; }
 .hist-row:hover .x { opacity: 1; }
 .hist-row .x:hover { background: var(--surface-2); color: var(--fg); }
 .hist-row .x svg { width: 13px; height: 13px; }

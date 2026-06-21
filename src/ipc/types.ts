@@ -92,6 +92,12 @@ export interface SitePermission {
   readonly requested: boolean;
 }
 
+/** All permission overrides for one origin (for the global manager). */
+export interface OriginPermissions {
+  readonly origin: string;
+  readonly permissions: readonly SitePermission[];
+}
+
 /** Aggregate, runtime-derived privacy assessment for a single tab. */
 export interface PrivacyScore {
   /** 0 (hostile) – 100 (clean), computed from observed runtime behaviour. */

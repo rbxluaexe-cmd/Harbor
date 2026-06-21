@@ -10,7 +10,7 @@
  */
 import { z } from 'zod';
 
-import type { PermissionDecision, SitePermission } from '../../ipc';
+import type { OriginPermissions, PermissionDecision, SitePermission } from '../../ipc';
 import { Bus } from '../bus';
 import { JsonStore } from '../store';
 
@@ -93,6 +93,24 @@ export class PermissionsManager {
         const effective = this.decide(origin, permission) ? 'allow' : 'deny';
         return { permission, label: labelFor(permission), effective, override, requested: requested.has(permission) };
       });
+  }
+
+  /** Every origin that has at least one override, for the global manager. */
+  allSites(): readonly OriginPermissions[] {
+    return Object.keys(this.store.get().overrides)
+      .sort()
+      .map((origin) => ({ origin, permissions: this.list(origin) }));
+  }
+
+  /** Remove all overrides for an origin (reset to defaults). */
+  clearOrigin(origin: string): readonly OriginPermissions[] {
+    this.store.update((s) => {
+      const overrides = { ...s.overrides };
+      delete overrides[origin];
+      return { overrides };
+    });
+    this.bus.emit('permissions:changed', origin);
+    return this.allSites();
   }
 
   set(origin: string, permission: string, decision: PermissionDecision): readonly SitePermission[] {

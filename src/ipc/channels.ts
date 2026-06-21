@@ -15,6 +15,7 @@ import type {
   DuressStatus,
   HistoryEntry,
   LedgerSnapshot,
+  OriginPermissions,
   PermissionDecision,
   Preset,
   PresetSummary,
@@ -247,6 +248,14 @@ export interface InvokeMap {
     request: { origin: string; permission: string; decision: PermissionDecision };
     response: readonly SitePermission[];
   };
+  'permissions:all': {
+    request: void;
+    response: readonly OriginPermissions[];
+  };
+  'permissions:clearOrigin': {
+    request: { origin: string };
+    response: readonly OriginPermissions[];
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -338,6 +347,8 @@ export const INVOKE_CHANNELS = [
   'data:clearBrowsing',
   'permissions:get',
   'permissions:set',
+  'permissions:all',
+  'permissions:clearOrigin',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [

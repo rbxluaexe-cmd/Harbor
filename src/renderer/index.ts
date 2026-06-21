@@ -568,6 +568,46 @@ function toggleRow(label: string, checked: boolean, onChange: (v: boolean) => vo
 }
 
 let reloadHistory: (() => void) | null = null;
+let reloadPermManager: (() => void) | null = null;
+
+function renderPermManagerSection(): HTMLElement {
+  const section = el('div', { class: 'section' }, [el('h3', { text: 'Site permissions' })]);
+  const listEl = el('div', {});
+  section.append(listEl);
+  const load = (): void => {
+    void invoke(harbor.invoke('permissions:all')).then((sites) => {
+      listEl.replaceChildren();
+      if (!sites || sites.length === 0) {
+        listEl.append(el('div', { class: 'muted', text: 'No per-site permission overrides yet.' }));
+        return;
+      }
+      for (const site of sites) {
+        const summary = site.permissions
+          .filter((p) => p.override !== 'default')
+          .map((p) => `${p.label}: ${p.override === 'allow' ? 'Allow' : 'Block'}`)
+          .join(' · ');
+        listEl.append(el('div', { class: 'preset' }, [
+          el('div', { class: 'row', style: 'justify-content:space-between;gap:8px' }, [
+            el('div', { style: 'min-width:0' }, [
+              el('div', { class: 'name', style: 'overflow:hidden;text-overflow:ellipsis', text: site.origin }),
+              el('div', { class: 'muted', style: 'font-size:11px;overflow:hidden;text-overflow:ellipsis', text: summary || '—' }),
+            ]),
+            el('button', { class: 'btn sm', text: 'Reset', onclick: () => void resetOrigin(site.origin) }),
+          ]),
+        ]));
+      }
+    });
+  };
+  reloadPermManager = load;
+  load();
+  return section;
+}
+
+async function resetOrigin(origin: string): Promise<void> {
+  await invoke(harbor.invoke('permissions:clearOrigin', { origin }));
+  permsByOrigin.delete(origin);
+  reloadPermManager?.();
+}
 
 async function renderHistory(body: HTMLElement): Promise<void> {
   const search = el('input', {
@@ -648,7 +688,7 @@ function renderSettings(body: HTMLElement): void {
     el('button', { class: 'btn', style: 'margin-top:8px', text: 'Clear all browsing data', onclick: () => void clearBrowsing() }),
   ]);
 
-  body.append(presetSection, homeSection, privacy, renderSyncSection(), renderDuressSection(), renderUpdateSection());
+  body.append(presetSection, homeSection, privacy, renderPermManagerSection(), renderSyncSection(), renderDuressSection(), renderUpdateSection());
 }
 
 function renderSyncSection(): HTMLElement {
@@ -882,7 +922,7 @@ function subscribe(): void {
   harbor.on('bookmarks:changed', (list) => { state.bookmarks = list; renderTabs(); buildToolbar(); renderBookmarksBar(); });
   harbor.on('history:changed', () => { if (state.panelMode === 'history') reloadHistory?.(); });
   harbor.on('downloads:changed', (list) => { state.downloads = list; buildToolbar(); renderDownloads(); });
-  harbor.on('permissions:changed', (origin) => { void loadPermissions(origin); });
+  harbor.on('permissions:changed', (origin) => { void loadPermissions(origin); if (state.panelMode === 'settings') reloadPermManager?.(); });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
