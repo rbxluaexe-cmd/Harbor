@@ -130,6 +130,7 @@ export function registerIpcRouter(m: RouterModules): void {
   handle('duress:trigger', () => m.duress.trigger());
 
   handle('update:check', () => m.update.check());
+  handle('update:download', () => m.update.download());
 
   handle('window:minimize', () => {
     m.tabs.minimizeWindow();

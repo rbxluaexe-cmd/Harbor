@@ -180,8 +180,18 @@ export interface UpdateStatus {
   readonly currentVersion: string;
   readonly latestVersion: string | null;
   readonly updateAvailable: boolean;
+  /** True when a published SHA-256 checksum was found for the installer. */
   readonly signatureVerified: boolean;
+  readonly downloadUrl: string | null;
+  readonly expectedSha256: string | null;
   readonly checkedAt: number;
+  readonly message: string;
+}
+
+/** Result of downloading + hash-verifying an update installer. */
+export interface UpdateDownloadResult {
+  readonly ok: boolean;
+  readonly path: string;
   readonly message: string;
 }
 

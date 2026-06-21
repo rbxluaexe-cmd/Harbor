@@ -778,9 +778,16 @@ function renderDuressSection(): HTMLElement {
 
 function renderUpdateSection(): HTMLElement {
   const out = el('div', { class: 'muted', text: 'Not checked yet.', style: 'margin-top:8px' });
+  const dlBtn = el('button', { class: 'btn', text: 'Download & verify', style: 'margin-left:8px' }) as HTMLButtonElement;
+  dlBtn.disabled = true;
+  dlBtn.addEventListener('click', () => void downloadUpdate(out));
   return el('div', { class: 'section' }, [
-    el('h3', { text: 'Binary transparency' }),
-    el('button', { class: 'btn', text: 'Check for signed update', onclick: () => void checkUpdate(out) }),
+    el('h3', { text: 'Updates & transparency' }),
+    el('div', { class: 'muted', text: 'Checks GitHub Releases and verifies the installer SHA-256 before saving it.' }),
+    el('div', { class: 'row', style: 'margin-top:8px' }, [
+      el('button', { class: 'btn', text: 'Check for updates', onclick: () => void checkUpdate(out, dlBtn) }),
+      dlBtn,
+    ]),
     out,
   ]);
 }
@@ -863,10 +870,18 @@ async function doSync(dir: 'push' | 'pull'): Promise<void> {
   renderPanel();
 }
 async function saveDuress(config: DuressConfig): Promise<void> { const status = await invoke(harbor.invoke('duress:configure', { config })); if (status) state.duress = status.config; renderPanel(); }
-async function checkUpdate(out: HTMLElement): Promise<void> {
-  out.textContent = 'Checking…';
+async function checkUpdate(out: HTMLElement, dlBtn?: HTMLButtonElement): Promise<void> {
+  out.textContent = 'Checking GitHub…';
   const status = await invoke(harbor.invoke('update:check'));
-  out.textContent = status ? `${status.message} (signature ${status.signatureVerified ? 'verified' : 'unverified'})` : 'Check failed.';
+  if (!status) { out.textContent = 'Check failed.'; return; }
+  out.textContent = status.message + (status.expectedSha256 ? ` · sha256 ${status.expectedSha256.slice(0, 12)}…` : '');
+  if (dlBtn) dlBtn.disabled = !(status.updateAvailable && status.downloadUrl);
+}
+
+async function downloadUpdate(out: HTMLElement): Promise<void> {
+  out.textContent = 'Downloading & verifying…';
+  const res = await invoke(harbor.invoke('update:download'));
+  out.textContent = res ? res.message : 'Download failed.';
 }
 async function createCompartment(name: string, persistent: boolean): Promise<void> {
   if (!name.trim()) return;

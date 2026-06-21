@@ -1,41 +1,32 @@
 /**
- * Signed update checks.
+ * GitHub-backed update checks with hash verification.
  *
- * Closes the "trust us" gap: a release is only acted on if its manifest carries
- * a valid Ed25519 signature from the pinned project key (verified with
- * libsodium), so "this binary matches the public source" is independently
- * checkable rather than asserted. Network fetching of the manifest is a later
- * phase; this verifies whatever manifest is present and never trusts an
- * unsigned or wrongly-signed one.
+ * Polls the public GitHub Releases API for the latest release, compares it to
+ * the running version, and reads the published SHA-256 from the release's
+ * `checksums.txt` asset. Downloading then re-computes the SHA-256 of the bytes
+ * and refuses anything that doesn't match the published hash — so a tampered or
+ * corrupted download is rejected rather than run. Installation stays manual
+ * (the verified installer is revealed to the user); Harbor never silently runs
+ * a downloaded binary.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { app } from 'electron';
-import _sodium from 'libsodium-wrappers';
-import { z } from 'zod';
+import { app, shell } from 'electron';
 
-import type { UpdateStatus } from '../../ipc';
+import type { UpdateDownloadResult, UpdateStatus } from '../../ipc';
 
-// Pinned release-signing public key (Ed25519, hex). Replace with the real key
-// at release time; a placeholder verifies nothing, so updates stay un-trusted.
-const PINNED_PUBKEY_HEX = '0000000000000000000000000000000000000000000000000000000000000000';
+const REPO = 'rbxluaexe-cmd/Harbor';
+const UA = 'Harbor-Updater';
 
-const manifestSchema = z.object({
-  version: z.string(),
-  sha256: z.string(),
-  url: z.string(),
-});
+interface GithubAsset {
+  name: string;
+  browser_download_url: string;
+}
 
 export class UpdateChecker {
-  private readonly manifestPath: string;
-  private readonly signaturePath: string;
-
-  constructor() {
-    const dir = join(app.getPath('userData'), 'update');
-    this.manifestPath = join(dir, 'manifest.json');
-    this.signaturePath = join(dir, 'manifest.sig');
-  }
+  private lastStatus: UpdateStatus | null = null;
 
   async check(): Promise<UpdateStatus> {
     const currentVersion = app.getVersion();
@@ -44,57 +35,98 @@ export class UpdateChecker {
       latestVersion: null,
       updateAvailable: false,
       signatureVerified: false,
+      downloadUrl: null,
+      expectedSha256: null,
       checkedAt: Date.now(),
-      message: 'No release manifest available yet',
+      message: '',
     };
+    try {
+      const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
+        headers: { 'User-Agent': UA, Accept: 'application/vnd.github+json' },
+      });
+      if (!res.ok) {
+        return { ...base, message: res.status === 404 ? 'No releases published yet' : `Update check failed (HTTP ${res.status})` };
+      }
+      const data = (await res.json()) as { tag_name?: string; assets?: GithubAsset[] };
+      const latestVersion = String(data.tag_name ?? '').replace(/^v/i, '');
+      const assets = Array.isArray(data.assets) ? data.assets : [];
+      const installer = assets.find((a) => /\.exe$/i.test(a.name));
+      const checksums = assets.find((a) => /checksums?\.txt$/i.test(a.name));
 
-    if (!existsSync(this.manifestPath) || !existsSync(this.signaturePath)) {
-      return base;
-    }
+      let expectedSha256: string | null = null;
+      if (checksums && installer) {
+        const cres = await fetch(checksums.browser_download_url, { headers: { 'User-Agent': UA } });
+        if (cres.ok) {
+          expectedSha256 = parseChecksum(await cres.text(), installer.name);
+        }
+      }
 
-    const manifestBytes = new Uint8Array(readFileSync(this.manifestPath));
-    const signature = new Uint8Array(readFileSync(this.signaturePath));
-    const verified = await verifySignature(manifestBytes, signature);
-
-    if (!verified) {
-      return {
-        ...base,
-        signatureVerified: false,
-        message: 'Release manifest signature is INVALID — refusing to trust it',
+      const updateAvailable = latestVersion.length > 0 && isNewer(latestVersion, currentVersion);
+      const status: UpdateStatus = {
+        currentVersion,
+        latestVersion: latestVersion || null,
+        updateAvailable,
+        signatureVerified: expectedSha256 !== null,
+        downloadUrl: installer?.browser_download_url ?? null,
+        expectedSha256,
+        checkedAt: Date.now(),
+        message: updateAvailable
+          ? expectedSha256
+            ? `Verified update ${latestVersion} available`
+            : `Update ${latestVersion} available (no checksum published — download unverified)`
+          : 'You are on the latest release',
       };
+      this.lastStatus = status;
+      return status;
+    } catch {
+      return { ...base, message: 'Update check failed — offline or network blocked' };
     }
+  }
 
-    const parsed = manifestSchema.safeParse(JSON.parse(new TextDecoder().decode(manifestBytes)));
-    if (!parsed.success) {
-      return { ...base, signatureVerified: true, message: 'Signed manifest is malformed' };
+  /** Download the latest installer and verify its SHA-256 before revealing it. */
+  async download(): Promise<UpdateDownloadResult> {
+    const status = this.lastStatus;
+    if (!status?.downloadUrl) {
+      return { ok: false, path: '', message: 'Run a check first.' };
     }
-
-    const latestVersion = parsed.data.version;
-    const updateAvailable = isNewer(latestVersion, currentVersion);
-    return {
-      currentVersion,
-      latestVersion,
-      updateAvailable,
-      signatureVerified: true,
-      checkedAt: Date.now(),
-      message: updateAvailable
-        ? `Verified update ${latestVersion} available`
-        : 'You are on the latest verified release',
-    };
+    try {
+      const res = await fetch(status.downloadUrl, { headers: { 'User-Agent': UA } });
+      if (!res.ok) {
+        return { ok: false, path: '', message: `Download failed (HTTP ${res.status})` };
+      }
+      const bytes = Buffer.from(await res.arrayBuffer());
+      const actual = createHash('sha256').update(bytes).digest('hex');
+      if (status.expectedSha256 && actual.toLowerCase() !== status.expectedSha256.toLowerCase()) {
+        return { ok: false, path: '', message: 'SHA-256 mismatch — download rejected as tampered.' };
+      }
+      const dest = join(app.getPath('temp'), `Harbor-Setup-${status.latestVersion ?? 'latest'}.exe`);
+      writeFileSync(dest, bytes);
+      shell.showItemInFolder(dest);
+      return {
+        ok: true,
+        path: dest,
+        message: status.expectedSha256
+          ? `Downloaded and SHA-256 verified. Saved to ${dest}`
+          : `Downloaded (unverified — no published checksum). Saved to ${dest}`,
+      };
+    } catch {
+      return { ok: false, path: '', message: 'Download failed — offline or network blocked' };
+    }
   }
 }
 
-async function verifySignature(message: Uint8Array, signature: Uint8Array): Promise<boolean> {
-  try {
-    await _sodium.ready;
-    const pubkey = _sodium.from_hex(PINNED_PUBKEY_HEX);
-    return _sodium.crypto_sign_verify_detached(signature, message, pubkey);
-  } catch {
-    return false;
+/** Extract the 64-hex SHA-256 for a filename from a checksums.txt body. */
+function parseChecksum(text: string, filename: string): string | null {
+  for (const line of text.split(/\r?\n/)) {
+    if (line.includes(filename)) {
+      const match = line.match(/\b[a-fA-F0-9]{64}\b/);
+      if (match) return match[0];
+    }
   }
+  return null;
 }
 
-/** Simple semver-ish comparison: returns true when `candidate` > `current`. */
+/** Returns true when `candidate` is a newer version than `current`. */
 function isNewer(candidate: string, current: string): boolean {
   const a = candidate.split('.').map((n) => Number.parseInt(n, 10) || 0);
   const b = current.split('.').map((n) => Number.parseInt(n, 10) || 0);
@@ -102,9 +134,7 @@ function isNewer(candidate: string, current: string): boolean {
   for (let i = 0; i < len; i += 1) {
     const x = a[i] ?? 0;
     const y = b[i] ?? 0;
-    if (x !== y) {
-      return x > y;
-    }
+    if (x !== y) return x > y;
   }
   return false;
 }

@@ -25,6 +25,7 @@ import type {
   SyncResult,
   SyncStatus,
   TabInfo,
+  UpdateDownloadResult,
   UpdateStatus,
 } from './types';
 
@@ -156,6 +157,10 @@ export interface InvokeMap {
   'update:check': {
     request: void;
     response: UpdateStatus;
+  };
+  'update:download': {
+    request: void;
+    response: UpdateDownloadResult;
   };
 
   'settings:get': {
@@ -338,6 +343,7 @@ export const INVOKE_CHANNELS = [
   'duress:configure',
   'duress:trigger',
   'update:check',
+  'update:download',
   'settings:get',
   'settings:set',
   'window:minimize',
