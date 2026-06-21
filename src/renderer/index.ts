@@ -15,8 +15,10 @@ import type {
   DuressConfig,
   HistoryEntry,
   LedgerSnapshot,
+  PermissionDecision,
   PresetSummary,
   Settings,
+  SitePermission,
   SyncStatus,
   TabInfo,
 } from '../ipc';
@@ -127,6 +129,35 @@ function compartmentFor(id: string): Compartment | undefined {
 }
 function activeSnapshot(): LedgerSnapshot | null {
   return state.activeTabId === null ? null : state.ledgerByTab.get(state.activeTabId) ?? null;
+}
+
+const permsByOrigin = new Map<string, readonly SitePermission[]>();
+function originOf(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.origin : '';
+  } catch {
+    return '';
+  }
+}
+function activeOrigin(): string {
+  const a = activeTab();
+  return a ? originOf(a.url) : '';
+}
+async function loadPermissions(origin: string): Promise<void> {
+  if (!origin) return;
+  const list = await invoke(harbor.invoke('permissions:get', { origin }));
+  if (list) {
+    permsByOrigin.set(origin, list);
+    if (state.panelMode === 'ledger' && activeOrigin() === origin) renderPanel();
+  }
+}
+async function setPerm(origin: string, permission: string, decision: PermissionDecision): Promise<void> {
+  const list = await invoke(harbor.invoke('permissions:set', { origin, permission, decision }));
+  if (list) {
+    permsByOrigin.set(origin, list);
+    if (state.panelMode === 'ledger') renderPanel();
+  }
 }
 async function invoke<T>(p: Promise<T>): Promise<T | null> {
   try { return await p; } catch (err) { console.error('Harbor IPC error', err); return null; }
@@ -412,28 +443,71 @@ function panelTabButton(label: string, mode: PanelMode): HTMLElement {
 
 function renderLedger(body: HTMLElement): void {
   const snap = activeSnapshot();
-  if (!snap) { body.append(el('p', { class: 'muted', text: 'No activity recorded for this tab yet.' })); return; }
-  const s = snap.score;
-  const ring = el('div', { class: 'ring', style: `--p:${s.value}` }, [
-    el('span', { class: 'ring-inner' }, [el('span', { class: `ring-val grade-${s.grade}`, text: String(s.value) })]),
-  ]);
-  body.append(
-    el('div', { class: 'score-card' }, [ring, el('div', { class: 'grade-line', text: `Grade ${s.grade} · live from this page's behaviour` })]),
-    el('div', { class: 'stat-grid' }, [
-      stat(s.totalRequests, 'requests'),
-      stat(s.blockedRequests, 'blocked'),
-      stat(s.thirdParties, 'third parties'),
-      stat(s.trackersBlocked, 'trackers'),
-      stat(s.cnameUncloaked, 'CNAME-uncloaked'),
-      stat(s.fingerprintAttempts, 'fingerprint hits'),
-    ]),
-  );
-  for (const entry of [...snap.entries].reverse().slice(0, 100)) {
-    body.append(el('div', { class: `entry ${entry.disposition}` }, [
-      el('div', { class: 'summary', text: entry.summary }),
-      el('div', { class: 'meta', text: `${entry.resourceType} · ${new Date(entry.timestamp).toLocaleTimeString()}` }),
+  if (snap === null && state.activeTabId !== null) {
+    void loadLedger(state.activeTabId).then(() => { if (state.panelMode === 'ledger') renderPanel(); });
+  }
+  if (snap && snap.entries.length > 0) {
+    const s = snap.score;
+    const ring = el('div', { class: 'ring', style: `--p:${s.value}` }, [
+      el('span', { class: 'ring-inner' }, [el('span', { class: `ring-val grade-${s.grade}`, text: String(s.value) })]),
+    ]);
+    body.append(
+      el('div', { class: 'score-card' }, [ring, el('div', { class: 'grade-line', text: `Grade ${s.grade} · live from this page's behaviour` })]),
+      el('div', { class: 'stat-grid' }, [
+        stat(s.totalRequests, 'requests'),
+        stat(s.blockedRequests, 'blocked'),
+        stat(s.thirdParties, 'third parties'),
+        stat(s.trackersBlocked, 'trackers'),
+        stat(s.cnameUncloaked, 'CNAME-uncloaked'),
+        stat(s.fingerprintAttempts, 'fingerprint hits'),
+      ]),
+    );
+  } else {
+    body.append(el('p', { class: 'muted', text: 'No tracker activity on this tab yet.' }));
+  }
+
+  const origin = activeOrigin();
+  if (origin) {
+    if (!permsByOrigin.has(origin)) void loadPermissions(origin);
+    body.append(renderPermissions(origin));
+  }
+
+  if (snap) {
+    for (const entry of [...snap.entries].reverse().slice(0, 100)) {
+      body.append(el('div', { class: `entry ${entry.disposition}` }, [
+        el('div', { class: 'summary', text: entry.summary }),
+        el('div', { class: 'meta', text: `${entry.resourceType} · ${new Date(entry.timestamp).toLocaleTimeString()}` }),
+      ]));
+    }
+  }
+}
+
+function renderPermissions(origin: string): HTMLElement {
+  const list = permsByOrigin.get(origin) ?? [];
+  const section = el('div', { class: 'section', style: 'margin-top:4px' }, [el('h3', { text: 'Site permissions' })]);
+  if (list.length === 0) {
+    section.append(el('div', { class: 'muted', text: 'This site has not requested any special permissions.' }));
+    return section;
+  }
+  for (const p of list) {
+    const seg = el('div', { class: 'perm-seg' }, [
+      permBtn('Default', p.override === 'default', () => void setPerm(origin, p.permission, 'default')),
+      permBtn('Allow', p.override === 'allow', () => void setPerm(origin, p.permission, 'allow')),
+      permBtn('Block', p.override === 'deny', () => void setPerm(origin, p.permission, 'deny')),
+    ]);
+    section.append(el('div', { class: 'perm-row' }, [
+      el('div', { class: 'perm-info' }, [
+        el('div', { class: 'perm-label', text: p.label }),
+        el('div', { class: `perm-state ${p.effective}`, text: p.effective === 'allow' ? 'Allowed' : 'Blocked' }),
+      ]),
+      seg,
     ]));
   }
+  return section;
+}
+
+function permBtn(label: string, active: boolean, onclick: () => void): HTMLElement {
+  return el('button', { class: `perm-b${active ? ' on' : ''}`, text: label, onclick });
 }
 
 function stat(n: number, label: string): HTMLElement {
@@ -758,6 +832,7 @@ function subscribe(): void {
   harbor.on('bookmarks:changed', (list) => { state.bookmarks = list; renderTabs(); buildToolbar(); renderBookmarksBar(); });
   harbor.on('history:changed', () => { if (state.panelMode === 'history') reloadHistory?.(); });
   harbor.on('downloads:changed', (list) => { state.downloads = list; buildToolbar(); renderDownloads(); });
+  harbor.on('permissions:changed', (origin) => { void loadPermissions(origin); });
   harbor.on('duress:activated', (payload) => {
     state.ledgerByTab.clear();
     void refreshTabs();
@@ -784,6 +859,7 @@ async function init(): Promise<void> {
   }
   const dls = await invoke(harbor.invoke('downloads:list'));
   if (dls) state.downloads = dls;
+  if (state.activeTabId !== null) await loadLedger(state.activeTabId);
   subscribe();
   renderAll();
   const maxed = await invoke(harbor.invoke('window:isMaximized'));

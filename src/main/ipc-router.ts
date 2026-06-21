@@ -24,6 +24,7 @@ import { DownloadsManager } from './downloads';
 import { DuressController } from './duress';
 import { HistoryManager } from './history';
 import { Ledger } from './ledger';
+import { PermissionsManager } from './permissions';
 import { PresetManager } from './presets';
 import { SettingsStore } from './settings';
 import { SyncClient } from './sync';
@@ -43,6 +44,7 @@ export interface RouterModules {
   readonly bookmarks: BookmarksManager;
   readonly history: HistoryManager;
   readonly downloads: DownloadsManager;
+  readonly permissions: PermissionsManager;
 }
 
 export function registerIpcRouter(m: RouterModules): void {
@@ -168,6 +170,9 @@ export function registerIpcRouter(m: RouterModules): void {
     m.history.clear();
   });
 
+  handle('permissions:get', (req) => m.permissions.list(req.origin));
+  handle('permissions:set', (req) => m.permissions.set(req.origin, req.permission, req.decision));
+
   handle('settings:get', () => composedSettings());
   handle('settings:set', (req) => {
     const patch = req.patch;
@@ -233,6 +238,7 @@ function forwardBusEvents(m: RouterModules): void {
   m.bus.on('bookmarks:changed', (list) => send('bookmarks:changed', list));
   m.bus.on('history:changed', () => send('history:changed', null));
   m.bus.on('downloads:changed', (list) => send('downloads:changed', list));
+  m.bus.on('permissions:changed', (origin) => send('permissions:changed', origin));
 
   // Sanity: every declared event channel is wired above.
   void EVENT_CHANNELS;

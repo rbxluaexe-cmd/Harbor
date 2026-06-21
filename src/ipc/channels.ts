@@ -15,9 +15,11 @@ import type {
   DuressStatus,
   HistoryEntry,
   LedgerSnapshot,
+  PermissionDecision,
   Preset,
   PresetSummary,
   Settings,
+  SitePermission,
   SyncResult,
   SyncStatus,
   TabInfo,
@@ -228,6 +230,15 @@ export interface InvokeMap {
     request: void;
     response: void;
   };
+
+  'permissions:get': {
+    request: { origin: string };
+    response: readonly SitePermission[];
+  };
+  'permissions:set': {
+    request: { origin: string; permission: string; decision: PermissionDecision };
+    response: readonly SitePermission[];
+  };
 }
 
 /** One-way pushes from main to the renderer chrome. */
@@ -255,6 +266,8 @@ export interface EventMap {
   'history:changed': null;
   /** The downloads list changed (new download, progress, or completion). */
   'downloads:changed': readonly DownloadItem[];
+  /** A site's permissions changed (a request was seen or an override set). */
+  'permissions:changed': string;
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -313,6 +326,8 @@ export const INVOKE_CHANNELS = [
   'downloads:showInFolder',
   'downloads:clear',
   'data:clearBrowsing',
+  'permissions:get',
+  'permissions:set',
 ] as const satisfies readonly InvokeChannel[];
 
 export const EVENT_CHANNELS = [
@@ -331,4 +346,5 @@ export const EVENT_CHANNELS = [
   'bookmarks:changed',
   'history:changed',
   'downloads:changed',
+  'permissions:changed',
 ] as const satisfies readonly EventChannel[];

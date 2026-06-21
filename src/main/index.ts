@@ -28,6 +28,7 @@ import { FingerprintShield } from './fingerprint';
 import { Ledger } from './ledger';
 import { NetworkGuard } from './network';
 import { configureSecureDns } from './network/secure-dns';
+import { PermissionsManager } from './permissions';
 import { PresetManager } from './presets';
 import { registerIpcRouter } from './ipc-router';
 import { SettingsStore } from './settings';
@@ -121,10 +122,12 @@ function start(): void {
   // TabManager is referenced by the network guard's first-party check before it
   // exists; the closure resolves it lazily once assigned below.
   let tabs: TabManager;
+  const permissions = new PermissionsManager(bus);
   const network = new NetworkGuard(
     bus,
     () => presets.current(),
     (id) => tabs.getTabUrl(id),
+    permissions.decide,
   );
   const downloads = new DownloadsManager(bus);
   compartments.registerSessionConfigurator(network.configureSession);
@@ -176,7 +179,7 @@ function start(): void {
     persistSession: (openTabs) => session.save(openTabs),
   });
 
-  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history, downloads });
+  registerIpcRouter({ bus, compartments, tabs, presets, ledger, sync, duress, update, settings, bookmarks, history, downloads, permissions });
 
   const preloadPath = join(__dirname, '..', 'preload', 'index.js');
   const chromeHtmlPath = join(__dirname, '..', 'renderer', 'index.html');

@@ -25,19 +25,17 @@ import { hostnameOf, isSameSite } from './domain';
 import { applyOdohProxy } from './secure-dns';
 import { applyWebRtcPolicy } from './webrtc';
 
-/** Permissions denied outright; clipboard-read is additionally surfaced. */
-const DENIED_PERMISSIONS = new Set([
-  'clipboard-read',
-  'geolocation',
-  'hid',
-  'serial',
-  'usb',
-  'midiSysex',
-  'idle-detection',
-]);
-
 export type ConfigGetter = () => PresetConfig;
 export type TabUrlResolver = (webContentsId: number) => string | null;
+export type PermissionDecider = (origin: string, permission: string) => boolean;
+
+function originOf(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return '';
+  }
+}
 
 export class NetworkGuard {
   private readonly blocklist = new Blocklist();
@@ -47,6 +45,7 @@ export class NetworkGuard {
     private readonly bus: Bus,
     private readonly config: ConfigGetter,
     private readonly getTabUrl: TabUrlResolver,
+    private readonly decidePermission: PermissionDecider,
   ) {}
 
   /** Configurator handed to the identity module; runs once per session. */
@@ -59,7 +58,9 @@ export class NetworkGuard {
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       this.handlePermission(wc, permission, callback, details);
     });
-    ses.setPermissionCheckHandler((_wc, permission) => !DENIED_PERMISSIONS.has(permission));
+    ses.setPermissionCheckHandler((_wc, permission, requestingOrigin) =>
+      this.decidePermission(requestingOrigin, permission),
+    );
     void applyOdohProxy(ses, this.config().dnsMode);
   };
 
@@ -123,12 +124,13 @@ export class NetworkGuard {
     callback: (granted: boolean) => void,
     _details: unknown,
   ): void {
-    if (permission === 'clipboard-read') {
-      const tabId = webContents.id;
-      const url = webContents.getURL();
+    const url = webContents.getURL();
+    const origin = originOf(url);
+    const granted = this.decidePermission(origin, permission);
+    if (permission === 'clipboard-read' && !granted) {
       const domain = hostnameOf(url) ?? 'unknown';
       this.emit({
-        tabId,
+        tabId: webContents.id,
         url,
         domain,
         canonicalDomain: null,
@@ -139,7 +141,8 @@ export class NetworkGuard {
         timestamp: Date.now(),
       });
     }
-    callback(!DENIED_PERMISSIONS.has(permission));
+    this.bus.emit('permission:requested', { origin, permission, granted });
+    callback(granted);
   }
 
   private record(

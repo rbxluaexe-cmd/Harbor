@@ -415,6 +415,18 @@ select#compartment {
 .stat .l { color: var(--fg-dim); font-size: 11px; }
 
 .entry { padding: 9px 11px; border-radius: 9px; margin-bottom: 6px; background: var(--surface); border-left: 3px solid var(--border); }
+.perm-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.perm-info { min-width: 0; }
+.perm-label { font-size: 13px; }
+.perm-state { font-size: 11px; }
+.perm-state.allow { color: var(--good); }
+.perm-state.deny { color: var(--bad); }
+.perm-seg { display: flex; flex: 0 0 auto; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.perm-b { padding: 5px 8px; font-size: 11px; color: var(--fg-dim); border-right: 1px solid var(--border); }
+.perm-b:last-child { border-right: none; }
+.perm-b:hover { color: var(--fg); background: var(--surface); }
+.perm-b.on { background: var(--accent); color: #04121f; font-weight: 600; }
+
 .entry.blocked { border-left-color: var(--bad); }
 .entry.redirected { border-left-color: var(--warn); }
 .entry .summary { user-select: text; }

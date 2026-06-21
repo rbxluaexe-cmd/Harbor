@@ -46,6 +46,10 @@ export interface InternalEventMap {
   'history:changed': void;
   /** Downloads list changed. */
   'downloads:changed': readonly DownloadItem[];
+  /** A site requested a permission (for recording + the ledger). */
+  'permission:requested': { origin: string; permission: string; granted: boolean };
+  /** A site's permission set changed (request seen or override set). */
+  'permissions:changed': string;
 }
 
 export type InternalEvent = keyof InternalEventMap;

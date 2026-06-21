@@ -77,6 +77,21 @@ export interface LedgerEntry {
   readonly summary: string;
 }
 
+/** A user override for a site permission. `default` means follow Harbor's policy. */
+export type PermissionDecision = 'allow' | 'deny' | 'default';
+
+/** A site permission, its effective state, and whether the site asked for it. */
+export interface SitePermission {
+  readonly permission: string;
+  readonly label: string;
+  /** What actually happens now (after applying any override). */
+  readonly effective: 'allow' | 'deny';
+  /** The user's override, or `default`. */
+  readonly override: PermissionDecision;
+  /** True if the current site has requested this permission this session. */
+  readonly requested: boolean;
+}
+
 /** Aggregate, runtime-derived privacy assessment for a single tab. */
 export interface PrivacyScore {
   /** 0 (hostile) – 100 (clean), computed from observed runtime behaviour. */
