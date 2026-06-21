@@ -42,7 +42,7 @@ interface UiState {
 
 const state: UiState = {
   version: '',
-  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true, restoreSession: true },
+  settings: { activePreset: '', homepage: '', showLedgerPanel: true, showBookmarksBar: true, restoreSession: true, theme: 'dark' },
   compartments: [],
   tabs: [],
   bookmarks: [],
@@ -405,7 +405,9 @@ function renderLedger(body: HTMLElement): void {
   const snap = activeSnapshot();
   if (!snap) { body.append(el('p', { class: 'muted', text: 'No activity recorded for this tab yet.' })); return; }
   const s = snap.score;
-  const ring = el('div', { class: 'ring', style: `--p:${s.value}` }, [el('span', { class: `score ${s.grade}` }, [el('span', { class: 'grade', text: String(s.value) })])]);
+  const ring = el('div', { class: 'ring', style: `--p:${s.value}` }, [
+    el('span', { class: 'ring-inner' }, [el('span', { class: `ring-val grade-${s.grade}`, text: String(s.value) })]),
+  ]);
   body.append(
     el('div', { class: 'score-card' }, [ring, el('div', { class: 'grade-line', text: `Grade ${s.grade} · live from this page's behaviour` })]),
     el('div', { class: 'stat-grid' }, [
@@ -507,6 +509,7 @@ function renderSettings(body: HTMLElement): void {
       el('button', { class: 'btn', text: 'Save homepage', onclick: () => void saveSettings({ homepage: homeInput.value }) })]),
     toggleRow('Show bookmarks bar', state.settings.showBookmarksBar, (v) => void saveSettings({ showBookmarksBar: v })),
     toggleRow('Restore tabs on launch', state.settings.restoreSession, (v) => void saveSettings({ restoreSession: v })),
+    toggleRow('Light theme', state.settings.theme === 'light', (v) => void saveSettings({ theme: v ? 'light' : 'dark' })),
   ]);
 
   const privacy = el('div', { class: 'section' }, [
@@ -712,7 +715,9 @@ function ensureActiveTab(): void {
   state.activeTabId = last ? last.id : null;
 }
 
-function renderAll(): void { renderTabs(); buildToolbar(); renderBookmarksBar(); renderPanel(); }
+function applyTheme(): void { document.body.dataset['theme'] = state.settings.theme; }
+
+function renderAll(): void { applyTheme(); renderTabs(); buildToolbar(); renderBookmarksBar(); renderPanel(); }
 
 // --- events ------------------------------------------------------------------
 

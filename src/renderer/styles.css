@@ -17,6 +17,18 @@
   --radius: 10px;
 }
 
+body[data-theme="light"] {
+  --bg: #eef2f8;
+  --titlebar: #e2e8f1;
+  --toolbar: #f5f8fc;
+  --surface: #ffffff;
+  --surface-2: #e7edf6;
+  --border: #d4dde9;
+  --fg: #1f2a3a;
+  --fg-dim: #647184;
+  --accent: #0284c7;
+}
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -40,8 +52,10 @@ button {
   justify-content: center;
 }
 
-svg { width: 16px; height: 16px; display: block; }
-button svg, #findbar svg {
+svg {
+  width: 16px;
+  height: 16px;
+  display: block;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -378,10 +392,15 @@ select#compartment {
 .score-card .ring {
   width: 96px; height: 96px; margin: 0 auto 10px; border-radius: 50%;
   display: grid; place-items: center;
-  font-size: 34px; font-weight: 700;
   background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-2) 0);
 }
-.score-card .ring span { width: 78px; height: 78px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; }
+.score-card .ring-inner { width: 78px; height: 78px; border-radius: 50%; background: var(--bg); display: grid; place-items: center; }
+.score-card .ring-val { font-size: 34px; font-weight: 700; }
+.grade-A { color: var(--good); }
+.grade-B { color: #a3e635; }
+.grade-C { color: var(--warn); }
+.grade-D { color: #fb923c; }
+.grade-F { color: var(--bad); }
 .score-card .grade-line { color: var(--fg-dim); font-size: 12px; }
 
 .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }

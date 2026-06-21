@@ -11,6 +11,7 @@ const settingsSchema = z.object({
   showLedgerPanel: z.boolean(),
   showBookmarksBar: z.boolean(),
   restoreSession: z.boolean(),
+  theme: z.enum(['dark', 'light']),
 });
 
 export type StoredSettings = z.infer<typeof settingsSchema>;
@@ -25,6 +26,7 @@ export class SettingsStore {
       showLedgerPanel: true,
       showBookmarksBar: true,
       restoreSession: true,
+      theme: 'dark',
     }));
   }
 

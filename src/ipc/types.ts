@@ -194,6 +194,9 @@ export interface DownloadItem {
   readonly startedAt: number;
 }
 
+/** Chrome colour theme. */
+export type Theme = 'dark' | 'light';
+
 /** User-facing settings independent of the active preset. */
 export interface Settings {
   readonly activePreset: string;
@@ -201,6 +204,7 @@ export interface Settings {
   readonly showLedgerPanel: boolean;
   readonly showBookmarksBar: boolean;
   readonly restoreSession: boolean;
+  readonly theme: Theme;
 }
 
 /** Top-level state pushed to the renderer on startup so it can render once. */
