@@ -196,6 +196,38 @@ export interface CookieInfo {
   readonly httpOnly: boolean;
 }
 
+/** Plugins act on the browser; extensions act on web pages. */
+export type AddonKind = 'plugin' | 'extension';
+/** Trust class assigned at install/by the user. */
+export type TrustLevel = 'untrusted' | 'trusted';
+
+/** A finding from the heuristic security scan of addon code. */
+export interface ScanFinding {
+  readonly severity: 'low' | 'medium' | 'high';
+  readonly rule: string;
+  readonly detail: string;
+}
+
+/** An installed plugin or extension and its current state. */
+export interface AddonInfo {
+  readonly id: string;
+  readonly name: string;
+  readonly version: string;
+  readonly description: string;
+  readonly kind: AddonKind;
+  /** Capabilities the addon requests (gated; granted only when enabled). */
+  readonly permissions: readonly string[];
+  /** URL match patterns for extension content scripts. */
+  readonly matches: readonly string[];
+  readonly trust: TrustLevel;
+  readonly enabled: boolean;
+  readonly findings: readonly ScanFinding[];
+  /** Highest finding severity, for the UI. */
+  readonly riskLevel: 'none' | 'low' | 'medium' | 'high';
+  /** True if disabled by the runtime kill-switch after misbehaving. */
+  readonly killed: boolean;
+}
+
 /** Result of downloading + hash-verifying an update installer. */
 export interface UpdateDownloadResult {
   readonly ok: boolean;

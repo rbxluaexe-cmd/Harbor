@@ -28,12 +28,12 @@ import { READER_EXTRACT_SCRIPT, type ReaderArticle } from '../reader';
 import type { SessionTab } from '../session';
 import type { PresetConfig } from '../../ipc';
 
-// Must match the chrome CSS: title bar (40) + toolbar (48), plus the optional
-// bookmarks bar (34) when it is shown.
-const BASE_TOP = 88;
-const BOOKMARKS_BAR = 34;
-const LEDGER_PANEL_WIDTH = 360;
-const SIDEBAR_WIDTH = 240; // vertical-tabs sidebar; must match the chrome CSS
+// Must match the chrome CSS: title bar (34) + toolbar (38), plus the optional
+// bookmarks bar (28) when it is shown.
+const BASE_TOP = 72;
+const BOOKMARKS_BAR = 28;
+const LEDGER_PANEL_WIDTH = 340;
+const SIDEBAR_WIDTH = 220; // vertical-tabs sidebar; must match the chrome CSS
 
 interface TabEntry {
   readonly view: WebContentsView;
